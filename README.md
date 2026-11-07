@@ -35,6 +35,16 @@ dev-server.mjs   servidor para testar no computador (opcional)
 3. Defina a senha da equipe (ou clique em **Gerar senha**) e em **Criar gerador**.
 4. Copie a mensagem pronta, com link e senha, e envie para o cliente.
 
+## Ajustar os campos de uma marmoraria
+
+No painel, abra **Editar** na marmoraria e vá até **Campos do gerador**:
+
+- **Campos padrão:** desligue o que a marmoraria não usa (some do formulário e do PDF).
+- **Campos novos:** crie campos (texto, número, valor, sim/não ou lista), escolha onde aparecem (cliente, peça ou condições), se vão no PDF e se são obrigatórios.
+- **Listas de sugestões:** materiais, detalhes de acabamento, ambientes, peças, pagamentos e motivos de perda.
+
+Salve: a equipe vê a mudança ao recarregar o gerador. Só o painel da QH4 altera essa configuração.
+
 ## Testar no computador (opcional)
 
 ```bash

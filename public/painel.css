@@ -128,3 +128,35 @@ body.painel{
 .invalid-field .seg{border-color:var(--bad);box-shadow:0 0 0 3px rgba(176,65,46,.12)}
 [data-squad] button{min-width:84px}
 @media (max-width:480px){[data-squad]{display:grid;grid-template-columns:repeat(2,1fr);width:100%}}
+
+/* Campos do gerador */
+.cx-sub{font-weight:700;font-size:15px;margin:4px 0 12px;display:flex;flex-direction:column;gap:2px}
+.cx-sub span{font-weight:500;font-size:13px;color:var(--muted)}
+.cx-groups{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px}
+@media (max-width:640px){.cx-groups{grid-template-columns:minmax(0,1fr)}}
+.cx-group{border:1px solid var(--line);border-radius:12px;padding:12px 14px;background:#fff;display:flex;flex-direction:column;gap:10px}
+.cx-gt{margin:0;font-size:11px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:var(--gold-ink)}
+.cx-sw .switch-text{font-weight:500}
+.cx-fixed{display:flex;gap:8px;align-items:flex-start;font-size:13px;color:var(--muted);margin:12px 0 26px}
+.cx-fixed svg{width:16px;height:16px;flex:none;margin-top:2px;fill:none;stroke:currentColor;stroke-width:2;stroke-linecap:round;stroke-linejoin:round}
+.cx-row{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:14px;border:1px solid var(--line);border-radius:12px;padding:14px;background:#fff;margin-bottom:10px}
+@media (max-width:760px){.cx-row{grid-template-columns:minmax(0,1fr)}}
+.cx-main{display:grid;grid-template-columns:minmax(0,1.4fr) minmax(0,1fr) minmax(0,1.2fr);gap:10px}
+@media (max-width:760px){.cx-main{grid-template-columns:minmax(0,1fr)}}
+.cx-ops{grid-column:1/-1}
+.cx-side{display:flex;flex-direction:column;gap:10px;justify-content:center;min-width:150px}
+@media (max-width:760px){.cx-side{flex-direction:row;flex-wrap:wrap;align-items:center}}
+.cx-btns{display:flex;gap:6px}
+.cx-btns .icon-btn{border:1px solid var(--line);width:36px;height:36px}
+.cx-btns .icon-btn:disabled{opacity:.35;cursor:default}
+.cx-list{border:1px solid var(--line);border-radius:10px;background:#fff;margin-bottom:8px}
+.cx-list summary{cursor:pointer;padding:12px 14px;font-weight:600;font-size:14px;display:flex;justify-content:space-between;gap:10px;list-style:none}
+.cx-list summary::-webkit-details-marker{display:none}
+.cx-list summary::after{content:"▾";color:var(--muted);margin-left:4px}
+.cx-list[open] summary::after{content:"▴"}
+.cx-count{font-weight:500;color:var(--muted);font-size:12px;margin-left:auto}
+.cx-list textarea{margin:0 14px;width:calc(100% - 28px);font-size:14px}
+.cx-list .btn{margin:8px 10px 12px}
+.cx-main{grid-template-columns:minmax(0,1fr) minmax(0,1fr)}
+.cx-main>.field:first-child{grid-column:1/-1}
+@media (max-width:760px){.cx-main{grid-template-columns:minmax(0,1fr)}}

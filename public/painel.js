@@ -321,9 +321,124 @@
   });
 
   /* ---------- Formulário (nova / editar) ---------- */
+  /* ---------- Campos do gerador ---------- */
+  var CATALOGO = [
+    { g: "Cliente e obra", itens: [["cliente.tel", "WhatsApp do cliente"], ["arquiteto", "Arquiteto(a) ou designer"], ["cliente.email", "E-mail do cliente"], ["obra.endereco", "Endereço da obra"], ["obra.bairro", "Bairro"], ["obra.cidade", "Cidade"], ["vendedor", "Vendedor responsável e WhatsApp"]] },
+    { g: "Peças", itens: [["peca.qtd", "Quantidade"], ["peca.espessura", "Espessura"], ["peca.acabamento", "Acabamento"], ["peca.obs", "Observação da peça"], ["peca.detalhes", "Detalhes de acabamento (botões)"], ["peca.precoM2", "R$ por m² (cálculo automático)"], ["comparar", "Comparar 2 opções de material"]] },
+    { g: "Valores e condições", itens: [["servicos", "Serviços (entrega, instalação…)"], ["desconto", "Desconto"], ["pagamento", "Forma de pagamento"], ["prazo", "Prazo de produção"], ["inclusos", "O que está e o que não está incluso"]] },
+    { g: "Documento", itens: [["imagens", "Imagens e referências"], ["explicarMateriais", "Explicação dos materiais"], ["observacoes", "Observações para o cliente"], ["termos", "Condições gerais"], ["assinatura", "Assinatura de aceite no PDF"]] }
+  ];
+  var LISTAS_PADRAO = {
+    ambientes: ["Cozinha", "Área gourmet", "Ilha", "Banheiro social", "Banheiro suíte", "Lavabo", "Lavanderia", "Varanda", "Sala de estar", "Escada", "Área externa", "Churrasqueira"],
+    pecas: ["Bancada", "Ilha", "Lavatório", "Tampo", "Frontão", "Saia", "Soleira", "Peitoril", "Nicho", "Revestimento", "Piso", "Rodapé", "Degrau", "Prateleira", "Mesa"],
+    materiais: ["Quartzo Branco", "Quartzo Cinza", "Quartzo Preto", "Quartzito Taj Mahal", "Quartzito Branco", "Quartzito Perla Venata", "Granito Preto São Gabriel", "Granito Branco Itaúnas", "Granito Cinza Corumbá", "Granito Verde Ubatuba", "Mármore Carrara", "Mármore Branco Piguês", "Mármore Travertino", "Nanoglass", "Superfície Ultracompacta", "Porcelanato"],
+    acabamentos: ["Polido", "Escovado", "Levigado", "Flameado", "Apicoado", "Acetinado"],
+    espessuras: ["1 cm", "2 cm", "3 cm", "4 cm"],
+    detalhes: ["Testeira 4 cm", "Saia", "Rodobanca", "Frontão", "Furo de cuba", "Furo de torneira", "Recorte de cooktop", "Cuba esculpida", "Borda reta", "Borda boleada", "Meia-esquadria", "Pés laterais"],
+    pagamentos: ["50% de entrada e 50% na instalação", "À vista no PIX com 5% de desconto", "Entrada + saldo em até 10x no cartão", "A combinar"],
+    motivos: ["Preço", "Prazo", "Foi para a concorrência", "Desistiu ou adiou a obra", "Não respondeu", "Outro"]
+  };
+  var LISTAS_NOMES = [["materiais", "Materiais"], ["detalhes", "Detalhes de acabamento (botões da peça)"], ["ambientes", "Ambientes"], ["pecas", "Tipos de peça"], ["acabamentos", "Acabamentos"], ["espessuras", "Espessuras"], ["pagamentos", "Formas de pagamento (atalhos)"], ["motivos", "Motivos de perda"]];
+  var TIPOS = [["texto", "Texto"], ["numero", "Número"], ["valor", "Valor em R$"], ["simnao", "Sim / Não"], ["lista", "Lista de opções"]];
+  var LOCAIS = [["cliente", "Dados do cliente e da obra"], ["peca", "Em cada peça"], ["condicoes", "Condições"]];
+  function normCampos(c) {
+    c = c || {};
+    return { ocultar: Object.assign({}, c.ocultar || {}), extras: (c.extras || []).map(function (e) { return Object.assign({ opcoes: [], pdf: true, obrigatorio: false }, e); }), listas: Object.assign({}, c.listas || {}) };
+  }
+  function cid() { return "c" + Math.random().toString(36).slice(2, 9); }
+  function camposHTML() {
+    var C = FORM.campos, h = "";
+    h += '<p class="cx-sub">Campos padrão <span>Desligue o que esta marmoraria não usa. O campo some do formulário e do PDF.</span></p><div class="cx-groups">';
+    CATALOGO.forEach(function (g) {
+      h += '<div class="cx-group"><p class="cx-gt">' + g.g + "</p>";
+      g.itens.forEach(function (it) {
+        var on = !C.ocultar[it[0]];
+        h += '<label class="switch cx-sw"><input type="checkbox" data-ocultar="' + it[0] + '"' + (on ? " checked" : "") + '><span class="track"></span><span class="switch-text">' + esc(it[1]) + "</span></label>";
+      });
+      h += "</div>";
+    });
+    h += '</div><p class="cx-fixed">' + ico("info") + "<span>Sempre aparecem: nome do cliente, data, peças com medidas, material e valor, validade e o total.</span></p>";
+    h += '<p class="cx-sub">Campos novos <span>Crie campos sob medida para esta marmoraria.</span></p>';
+    if (!C.extras.length) h += '<div class="empty" style="padding:18px">Nenhum campo novo. Ex.: “Cor do rejunte”, “Prazo combinado”, “Tem elevador na obra?”.</div>';
+    C.extras.forEach(function (e, i) {
+      h += '<div class="cx-row" data-i="' + i + '"><div class="cx-main">' +
+        '<label class="field"><span>Nome do campo</span><input type="text" data-cx="nome" value="' + esc(e.nome) + '" maxlength="60" placeholder="Ex.: Cor do rejunte"></label>' +
+        '<label class="field"><span>Tipo</span><select data-cx="tipo">' + TIPOS.map(function (t) { return '<option value="' + t[0] + '"' + (e.tipo === t[0] ? " selected" : "") + ">" + t[1] + "</option>"; }).join("") + "</select></label>" +
+        '<label class="field"><span>Onde aparece</span><select data-cx="local">' + LOCAIS.map(function (t) { return '<option value="' + t[0] + '"' + (e.local === t[0] ? " selected" : "") + ">" + t[1] + "</option>"; }).join("") + "</select></label>" +
+        (e.tipo === "lista" ? '<label class="field cx-ops"><span>Opções <small>(separe por vírgula)</small></span><input type="text" data-cx="opcoes" value="' + esc((e.opcoes || []).join(", ")) + '" placeholder="Ex.: Branco, Cinza, Preto"></label>' : "") +
+        '</div><div class="cx-side"><label class="switch"><input type="checkbox" data-cx="pdf"' + (e.pdf ? " checked" : "") + '><span class="track"></span><span class="switch-text">No PDF</span></label>' +
+        '<label class="switch"><input type="checkbox" data-cx="obrigatorio"' + (e.obrigatorio ? " checked" : "") + '><span class="track"></span><span class="switch-text">Obrigatório</span></label>' +
+        '<div class="cx-btns"><button type="button" class="icon-btn" data-cxa="up" title="Subir" aria-label="Subir"' + (i ? "" : " disabled") + '><svg viewBox="0 0 24 24"><path d="m6 15 6-6 6 6"/></svg></button>' +
+        '<button type="button" class="icon-btn" data-cxa="down" title="Descer" aria-label="Descer"' + (i < C.extras.length - 1 ? "" : " disabled") + '><svg viewBox="0 0 24 24"><path d="m6 9 6 6 6-6"/></svg></button>' +
+        '<button type="button" class="icon-btn danger" data-cxa="del" title="Apagar campo" aria-label="Apagar campo">' + ico("trash") + "</button></div></div></div>";
+    });
+    h += '<div class="add-row" style="margin:12px 0 22px"><button type="button" class="btn sm" id="cx-add">' + ico("plus") + "Adicionar campo</button></div>";
+    h += '<p class="cx-sub">Listas de sugestões <span>O que aparece para escolher ao preencher. Uma opção por linha.</span></p>';
+    LISTAS_NOMES.forEach(function (l) {
+      var custom = !!(C.listas[l[0]] && C.listas[l[0]].length), vals = custom ? C.listas[l[0]] : LISTAS_PADRAO[l[0]];
+      h += '<details class="cx-list"><summary>' + esc(l[1]) + '<span class="cx-count">' + vals.length + " opções" + (custom ? " · personalizada" : "") + "</span></summary>" +
+        '<textarea data-lista="' + l[0] + '" rows="7">' + esc(vals.join("\n")) + "</textarea>" +
+        '<button type="button" class="btn sm ghost" data-reset="' + l[0] + '">Restaurar padrão</button></details>';
+    });
+    return h;
+  }
+  function renderCampos() {
+    var box = $("#campos-box"); if (!box) return;
+    var open = $$("details.cx-list", box).map(function (d) { return d.open; });
+    box.innerHTML = camposHTML();
+    $$("details.cx-list", box).forEach(function (d, i) { if (open[i]) d.open = true; });
+  }
+  function bindCampos() {
+    var box = $("#campos-box"); if (!box) return;
+    var C = FORM.campos;
+    box.addEventListener("change", function (e) {
+      var el = e.target;
+      if (el.dataset.ocultar) { if (el.checked) delete C.ocultar[el.dataset.ocultar]; else C.ocultar[el.dataset.ocultar] = true; return; }
+      var row = el.closest(".cx-row"); if (!row) return;
+      var x = C.extras[+row.dataset.i], k = el.dataset.cx;
+      if (k === "pdf" || k === "obrigatorio") x[k] = el.checked;
+      if (k === "tipo" || k === "local") { x[k] = el.value; if (k === "tipo") renderCampos(); }
+    });
+    box.addEventListener("input", function (e) {
+      var el = e.target;
+      if (el.dataset.lista) {
+        var arr = el.value.split("\n").map(function (v) { return v.trim(); }).filter(Boolean);
+        C.listas[el.dataset.lista] = arr;
+        var cnt = el.closest("details").querySelector(".cx-count"); if (cnt) cnt.textContent = arr.length + " opções · personalizada";
+        return;
+      }
+      var row = el.closest(".cx-row"); if (!row) return;
+      var x = C.extras[+row.dataset.i];
+      if (el.dataset.cx === "nome") { x.nome = el.value; el.classList.remove("invalid"); }
+      if (el.dataset.cx === "opcoes") x.opcoes = el.value.split(",").map(function (v) { return v.trim(); }).filter(Boolean);
+    });
+    box.addEventListener("click", function (e) {
+      if (e.target.closest("#cx-add")) {
+        C.extras.push({ id: cid(), nome: "", tipo: "texto", local: "cliente", opcoes: [], pdf: true, obrigatorio: false });
+        renderCampos(); var ins = $$('#campos-box [data-cx="nome"]'); if (ins.length) ins[ins.length - 1].focus(); return;
+      }
+      var rs = e.target.closest("[data-reset]");
+      if (rs) { delete C.listas[rs.dataset.reset]; renderCampos(); $$("#campos-box details.cx-list").forEach(function (d) { if (d.querySelector('[data-lista="' + rs.dataset.reset + '"]')) d.open = true; }); toast("Lista padrão restaurada"); return; }
+      var b = e.target.closest("[data-cxa]"); if (!b) return;
+      var i = +b.closest(".cx-row").dataset.i, a = b.dataset.cxa;
+      if (a === "del") { if (C.extras[i].nome && !confirm("Apagar o campo “" + C.extras[i].nome + "”? O que já foi preenchido em orçamentos antigos deixa de aparecer.")) return; C.extras.splice(i, 1); }
+      if (a === "up" && i > 0) C.extras.splice(i - 1, 0, C.extras.splice(i, 1)[0]);
+      if (a === "down" && i < C.extras.length - 1) C.extras.splice(i + 1, 0, C.extras.splice(i, 1)[0]);
+      renderCampos();
+    });
+  }
+  function camposParaSalvar() {
+    var C = FORM.campos, listas = {};
+    Object.keys(C.listas).forEach(function (k) {
+      var l = C.listas[k] || [];
+      if (l.length && l.join("|") !== (LISTAS_PADRAO[k] || []).join("|")) listas[k] = l;
+    });
+    return { ocultar: C.ocultar, extras: C.extras.filter(function (e) { return String(e.nome || "").trim(); }), listas: listas };
+  }
+
   function emptyForm() {
     return { id: null, nome: "", slug: "", slugTouched: false, empresa: { cnpj: "", whatsapp: "", instagram: "", email: "", endereco: "", cidade: "" },
-      logo: null, tema: { cor: "#8a1c1c", escura: "#151313", fundoLogo: "claro", fonte: "moderna" }, sugestoes: [], senha: "", senhaOriginal: "", squad: "" };
+      logo: null, tema: { cor: "#8a1c1c", escura: "#151313", fundoLogo: "claro", fonte: "moderna" }, sugestoes: [], senha: "", senhaOriginal: "", squad: "", campos: normCampos(null) };
   }
   function localGet(k) { try { return localStorage.getItem(k) || ""; } catch (e) { return ""; } }
   function loadEdit(id) {
@@ -331,7 +446,7 @@
     api("GET", "get", undefined, "&id=" + encodeURIComponent(id)).then(function (m) {
       var f = emptyForm();
       f.id = m.id; f.nome = m.nome; f.slug = m.slug; f.slugTouched = true; f.empresa = Object.assign(f.empresa, m.empresa || {});
-      f.logo = m.logo || null; f.tema = Object.assign(f.tema, m.tema || {}); f.squad = m.squad || ""; f.senha = m.senha || ""; f.senhaOriginal = m.senha || ""; f.ativo = m.ativo;
+      f.logo = m.logo || null; f.tema = Object.assign(f.tema, m.tema || {}); f.campos = normCampos(m.campos); f.squad = m.squad || ""; f.senha = m.senha || ""; f.senhaOriginal = m.senha || ""; f.ativo = m.ativo;
       viewForm(f);
     }, function (e) { app.innerHTML = '<div class="empty"><strong>Não foi possível abrir</strong>' + esc(e.message) + "</div>"; });
   }
@@ -391,10 +506,11 @@
       "<small>" + (isNew ? "Mínimo de 6 caracteres." : F.senhaOriginal ? "Se você mudar a senha, quem estiver conectado precisa entrar de novo com a nova." : "Nenhuma senha registrada no painel. Digite ou gere uma para registrar (a anterior deixa de valer).") + "</small></label>" +
       '<div class="field"><span>&nbsp;</span><div class="add-row"><button type="button" class="btn" id="fgen">' + ico("spark") + (isNew ? "Gerar senha" : "Gerar nova senha") + "</button>" +
       (isNew ? "" : '<button type="button" class="btn" id="fcopypw">' + ico("copy") + "Copiar senha</button>") + "</div></div></div>");
+    h += sec(4, "Campos do gerador", "Só a QH4 altera. Depois de salvar, a equipe vê a mudança ao recarregar a página.", '<div id="campos-box">' + camposHTML() + "</div>");
     h += '<div class="add-row" style="justify-content:flex-end;margin:6px 0 30px"><a class="btn ghost" href="#/">Cancelar</a><button class="btn gold" id="fsave">' + ico("check") + (isNew ? "Criar gerador" : "Salvar alterações") + "</button></div>";
     h += '</div><aside class="f-side"><div class="pv" id="pv"></div></aside></div>';
     app.innerHTML = h; topbarH();
-    bindForm(); renderPreview(); checkSlug();
+    bindForm(); bindCampos(); renderPreview(); checkSlug();
   }
   function colorField(label, key, hint) {
     return '<div class="field"><span>' + label + '</span><div class="color-field"><input type="color" data-color="' + key + '" value="' + esc(FORM.tema[key]) + '" aria-label="' + label + '"><input type="text" data-colortxt="' + key + '" value="' + esc(FORM.tema[key]) + '" maxlength="7" aria-label="' + label + ' (hex)"></div><small>' + hint + "</small></div>";
@@ -490,7 +606,15 @@
       return;
     }
     var b = $("#fsave"); b.disabled = true; b.lastChild.textContent = "Salvando…";
-    var body = { nome: F.nome.trim(), slug: slugify(F.slug), empresa: Object.assign({}, F.empresa, { nome: F.nome.trim() }), logo: F.logo, tema: F.tema, squad: F.squad };
+    var semNome = $$('#campos-box [data-cx="nome"]').filter(function (x) { return !x.value.trim(); });
+    if (semNome.length) {
+      semNome.forEach(function (x) { x.classList.add("invalid"); });
+      semNome[0].scrollIntoView({ behavior: "smooth", block: "center" }); toast("Dê um nome ao campo novo ou apague-o.");
+      b.disabled = false; b.lastChild.textContent = isNew ? "Criar gerador" : "Salvar alterações"; return;
+    }
+    var semOps = F.campos.extras.filter(function (x) { return x.tipo === "lista" && !(x.opcoes || []).length; })[0];
+    if (semOps) { toast("Informe as opções do campo “" + semOps.nome + "”."); b.disabled = false; b.lastChild.textContent = isNew ? "Criar gerador" : "Salvar alterações"; return; }
+    var body = { nome: F.nome.trim(), slug: slugify(F.slug), empresa: Object.assign({}, F.empresa, { nome: F.nome.trim() }), logo: F.logo, tema: F.tema, squad: F.squad, campos: camposParaSalvar() };
     if (!isNew && F.senha !== F.senhaOriginal && F.senha) {
       if (!confirm("Você mudou a senha da equipe. Quem estiver usando o gerador vai precisar entrar de novo com a senha nova. Continuar?")) { b.disabled = false; b.lastChild.textContent = "Salvar alterações"; return; }
       body.senha = F.senha;

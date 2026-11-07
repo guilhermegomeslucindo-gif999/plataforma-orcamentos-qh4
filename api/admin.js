@@ -10,12 +10,12 @@
 import crypto from "node:crypto";
 import {
   handle, send, readBody, db, tx, T, q, str, HttpError, requireAdmin, checkAdminPassword, adminToken, slow,
-  hashPassword, slugify, validSlug, cleanTema, cleanLogo, cleanEmpresa, cleanSquad
+  hashPassword, slugify, validSlug, cleanTema, cleanLogo, cleanEmpresa, cleanSquad, cleanCampos
 } from "../lib/db.js";
 
 function pub(r) {
   return {
-    id: r.id, slug: r.slug, nome: r.nome, ativo: r.ativo, tema: r.tema || {}, squad: r.squad || "", senha: r.senha || "",
+    id: r.id, slug: r.slug, nome: r.nome, ativo: r.ativo, tema: r.tema || {}, squad: r.squad || "", senha: r.senha || "", campos: r.campos || {},
     empresa: (r.settings && r.settings.empresa) || {}, createdAt: new Date(r.created_at).getTime(), updatedAt: new Date(r.updated_at).getTime(),
     logoUrl: r.tem_logo ? "/api/logo?slug=" + encodeURIComponent(r.slug) + "&v=" + Math.floor(new Date(r.updated_at).getTime() / 1000) : null
   };
@@ -83,9 +83,9 @@ export default handle(async (req, res) => {
     const settings = { empresa, proximoNumero: 1 };
     try {
       const { rows } = await pool.query(
-        `insert into ${T.tenants} (id, slug, nome, senha_hash, senha, logo, tema, settings, squad)
-         values ($1, $2, $3, $4, $5, $6, $7::jsonb, $8::jsonb, $9) returning *, (logo is not null) as tem_logo`,
-        [crypto.randomUUID(), slug, nome, hashPassword(senha), senha, cleanLogo(b.logo), JSON.stringify(cleanTema(b.tema)), JSON.stringify(settings), cleanSquad(b.squad)]);
+        `insert into ${T.tenants} (id, slug, nome, senha_hash, senha, logo, tema, settings, squad, campos)
+         values ($1, $2, $3, $4, $5, $6, $7::jsonb, $8::jsonb, $9, $10::jsonb) returning *, (logo is not null) as tem_logo`,
+        [crypto.randomUUID(), slug, nome, hashPassword(senha), senha, cleanLogo(b.logo), JSON.stringify(cleanTema(b.tema)), JSON.stringify(settings), cleanSquad(b.squad), JSON.stringify(cleanCampos(b.campos))]);
       return send(res, 200, pub(rows[0]));
     } catch (e) {
       if (e && e.code === "23505") throw new HttpError(409, "Esse link já está em uso. Escolha outro.");
@@ -109,15 +109,16 @@ export default handle(async (req, res) => {
       const tema = b.tema ? cleanTema(b.tema) : t.tema;
       const ativo = b.ativo == null ? t.ativo : !!b.ativo;
       const squad = b.squad == null ? t.squad : cleanSquad(b.squad);
+      const campos = b.campos == null ? (t.campos || {}) : cleanCampos(b.campos);
       // senha nova só quando foi alterada: troca o acesso e desconecta quem estava logado
       const novaSenha = b.senha != null && String(b.senha) !== String(t.senha || "") ? checkSenha(b.senha) : null;
       try {
         const { rows } = await c.query(
-          `update ${T.tenants} set nome = $2, slug = $3, logo = $4, tema = $5::jsonb, settings = $6::jsonb, ativo = $7, squad = $8,
+          `update ${T.tenants} set nome = $2, slug = $3, logo = $4, tema = $5::jsonb, settings = $6::jsonb, ativo = $7, squad = $8, campos = $11::jsonb,
              senha = coalesce($9, senha), senha_hash = coalesce($10, senha_hash),
              token_version = token_version + (case when $9::text is null then 0 else 1 end), updated_at = now()
            where id = $1 returning *, (logo is not null) as tem_logo`,
-          [id, nome, slug, logo, JSON.stringify(tema), JSON.stringify(settings), ativo, squad, novaSenha, novaSenha ? hashPassword(novaSenha) : null]);
+          [id, nome, slug, logo, JSON.stringify(tema), JSON.stringify(settings), ativo, squad, novaSenha, novaSenha ? hashPassword(novaSenha) : null, JSON.stringify(campos)]);
         return rows[0];
       } catch (e) {
         if (e && e.code === "23505") throw new HttpError(409, "Esse link já está em uso. Escolha outro.");

@@ -77,6 +77,12 @@
   var DETALHES = ["Testeira 4 cm", "Saia", "Rodobanca", "Frontão", "Furo de cuba", "Furo de torneira", "Recorte de cooktop", "Cuba esculpida", "Borda reta", "Borda boleada", "Meia-esquadria", "Pés laterais"];
   var PAGAMENTOS = ["50% de entrada e 50% na instalação", "À vista no PIX com 5% de desconto", "Entrada + saldo em até 10x no cartão", "A combinar"];
   var MOTIVOS = ["Preço", "Prazo", "Foi para a concorrência", "Desistiu ou adiou a obra", "Não respondeu", "Outro"];
+  var LISTAS_PADRAO = { ambientes: AMBIENTES, pecas: PECAS, materiais: MATERIAIS, acabamentos: ACABAMENTOS, espessuras: ESPESSURAS, detalhes: DETALHES, pagamentos: PAGAMENTOS, motivos: MOTIVOS };
+  // Configuração de campos feita pelo painel da QH4 (só leitura aqui)
+  function CAMPOS() { return (S && S.campos) || {}; }
+  function vis(k) { var o = CAMPOS().ocultar || {}; return !o[k]; }
+  function LISTA(n) { var l = (CAMPOS().listas || {})[n]; return l && l.length ? l : LISTAS_PADRAO[n]; }
+  function extrasDe(local) { return (CAMPOS().extras || []).filter(function (e) { return e.local === local && e.nome; }); }
 
   var DEFAULT_SETTINGS = {
     empresa: { nome: "", cnpj: "", whatsapp: "", instagram: "", email: "", endereco: "", cidade: "" },
@@ -177,13 +183,13 @@
 
   /* ================= Modelo do orçamento ================= */
   function newItem(peca) {
-    return { id: uid(), peca: peca || "Bancada", comp: "", larg: "", qtd: "1", espessura: "2 cm", acabamento: "Polido", detalhes: [], obs: "", matA: "", precoA: "", valA: "", matB: "", precoB: "", valB: "" };
+    return { id: uid(), extras: {}, peca: peca || "Bancada", comp: "", larg: "", qtd: "1", espessura: "2 cm", acabamento: "Polido", detalhes: [], obs: "", matA: "", precoA: "", valA: "", matB: "", precoB: "", valB: "" };
   }
   function newAmb(nome) { return { id: uid(), nome: nome || "", itens: [newItem()] }; }
   function newQuote() {
     var v = S.vendedores[0] || { nome: "", tel: "" };
     return {
-      id: uid(), numero: null, titulo: "", data: todayISO(), validadeDias: S.validadeDias,
+      id: uid(), numero: null, titulo: "", extras: {}, data: todayISO(), validadeDias: S.validadeDias,
       vendedor: { nome: v.nome, tel: v.tel },
       cliente: { nome: "", tel: "", email: "" }, arquiteto: "",
       obra: { endereco: "", bairro: "", cidade: "" },
@@ -212,9 +218,9 @@
       a.itens.forEach(function (it) { A += itemVal(it, "A"); B += itemVal(it, "B"); });
       r.amb.push({ A: A, B: B }); r.pecasA += A; r.pecasB += B;
     });
-    q.servicos.forEach(function (s) { if (!s.incluso) r.serv += parseNum(s.valor); });
+    if (vis("servicos")) q.servicos.forEach(function (s) { if (!s.incluso) r.serv += parseNum(s.valor); });
     function fin(pecas) {
-      var sub = pecas + r.serv, dv = parseNum(q.desconto.valor);
+      var sub = pecas + r.serv, dv = vis("desconto") ? parseNum(q.desconto.valor) : 0;
       var d = q.desconto.tipo === "%" ? sub * Math.min(dv, 100) / 100 : Math.min(dv, sub);
       return { sub: sub, desc: d, total: sub - d };
     }
@@ -238,6 +244,8 @@
     if (q.termos == null) q.termos = S.termos.join("\n");
     if (q.titulo == null) q.titulo = "";
     q.ambientes = q.ambientes || [];
+    if (!q.extras || typeof q.extras !== "object") q.extras = {};
+    q.ambientes.forEach(function (a) { (a.itens || []).forEach(function (it) { if (!it.extras || typeof it.extras !== "object") it.extras = {}; }); });
   }
   function defaultTitle(q) {
     var amb = joinPt(q.ambientes.map(function (a) { return String(a.nome || "").trim(); }));
@@ -322,7 +330,7 @@
   /* ================= Tela: Novo orçamento ================= */
   function datalists() {
     function dl(id, arr) { return '<datalist id="' + id + '">' + arr.map(function (v) { return '<option value="' + esc(v) + '">'; }).join("") + "</datalist>"; }
-    return dl("dl-amb", AMBIENTES) + dl("dl-peca", PECAS) + dl("dl-mat", MATERIAIS) + dl("dl-acab", ACABAMENTOS) + dl("dl-esp", ESPESSURAS) +
+    return dl("dl-amb", LISTA("ambientes")) + dl("dl-peca", LISTA("pecas")) + dl("dl-mat", LISTA("materiais")) + dl("dl-acab", LISTA("acabamentos")) + dl("dl-esp", LISTA("espessuras")) +
       dl("dl-vend", S.vendedores.map(function (v) { return v.nome; }));
   }
   function fld(label, k, val, opts) {
@@ -335,6 +343,23 @@
     return '<label class="field' + (opts.cls ? " " + opts.cls : "") + '"><span>' + label + (opts.req ? ' <b class="req">*</b>' : "") + "</span>" + input + (opts.hint ? "<small>" + opts.hint + "</small>" : "") + "</label>";
   }
 
+  function fldExtra(e, k, val, cls) {
+    var lab = esc(e.nome) + (e.obrigatorio ? ' <b class="req">*</b>' : "") + (e.pdf ? "" : ' <small title="Não aparece no PDF">· uso interno</small>');
+    val = val == null ? "" : val;
+    var input;
+    if (e.tipo === "simnao" || e.tipo === "lista") {
+      var ops = e.tipo === "simnao" ? ["Sim", "Não"] : (e.opcoes || []);
+      input = '<select data-k="' + k + '" data-extra="' + e.id + '"><option value="">Selecione…</option>' + ops.map(function (o) { return "<option" + (o === val ? " selected" : "") + ">" + esc(o) + "</option>"; }).join("") + "</select>";
+    } else {
+      input = '<input type="text" data-k="' + k + '" data-extra="' + e.id + '" value="' + esc(val) + '" autocomplete="off"' + (e.tipo === "texto" ? "" : ' inputmode="decimal"') + ">";
+      if (e.tipo === "valor") input = '<div class="input-affix"><span class="affix">R$</span>' + input + "</div>";
+    }
+    return '<label class="field' + (cls ? " " + cls : "") + '"><span>' + lab + "</span>" + input + "</label>";
+  }
+  function extraTexto(e, v) {
+    v = String(v == null ? "" : v).trim(); if (!v) return "";
+    return e.tipo === "valor" ? money(parseNum(v)) : v;
+  }
   function viewNovo() {
     if (!Q) loadDraft();
     var editing = !!Q.numero;
@@ -343,35 +368,43 @@
       "<p>" + (editing ? "Altere o que precisar e toque em <b>Salvar alterações</b>. O número do orçamento continua o mesmo." : "Preencha os dados, as peças e as condições. O rascunho fica guardado enquanto você digita.") + "</p></div>" +
       '<div class="head-actions">' + (editing ? '<button class="btn sm ghost" data-act="cancelEdit">' + ico("x") + "Cancelar edição</button>" : '<button class="btn sm ghost" data-act="limpar">' + ico("plus") + "Começar outro</button>") + "</div></div>" +
       datalists() +
-      sec(1, "Cliente e obra", "Quem recebe o orçamento e onde é a obra.", formCliente()) +
-      sec(2, "Ambientes e peças", "Separe por ambiente, como o cliente pensa a obra.", formAmbientes(), compareSwitch()) +
-      sec(3, "Serviços, desconto e total", "Entrega, instalação e desconto.", formServicos()) +
-      sec(4, "Condições", "Pagamento, prazo, validade e o que está incluso.", formCondicoes()) +
-      sec(5, "Imagens e observações", "Opcional: projeto, chapa ou referência.", formExtras()) +
+      secoesNovo() +
       '<div class="actionbar"><div class="actionbar-inner"><div class="totals-mini" id="totals-mini"></div>' +
       '<button class="btn gold" data-act="gerar" id="btn-gerar">' + ico(editing ? "check" : "file") + (editing ? '<span>Salvar <span class="hide-sm">alterações</span></span>' : '<span>Gerar <span class="hide-sm">orçamento</span></span>') + "</button></div></div>";
     updateTotals();
     topbarH();
   }
+  function secoesNovo() {
+    var n = 0, h = "";
+    h += sec(++n, "Cliente e obra", "Quem recebe o orçamento e onde é a obra.", formCliente());
+    h += sec(++n, "Ambientes e peças", "Separe por ambiente, como o cliente pensa a obra.", formAmbientes(), compareSwitch());
+    var sv = [vis("servicos") ? "serviços" : "", vis("desconto") ? "desconto" : ""].filter(Boolean);
+    h += sec(++n, sv.length ? cap(sv.join(", ")) + " e total" : "Total", sv.length ? "Valores adicionais e o total do orçamento." : "Resumo dos valores.", formServicos());
+    h += sec(++n, "Condições", "Validade" + (vis("pagamento") ? ", pagamento" : "") + (vis("prazo") ? ", prazo" : "") + (vis("inclusos") ? " e o que está incluso" : "") + ".", formCondicoes());
+    var ex = formExtras(); if (ex) h += sec(++n, "Imagens e observações", "Opcional: projeto, chapa ou referência.", ex);
+    return h;
+  }
   function sec(n, title, sub, body, extra) {
     return '<section class="card"><div class="card-head"><span class="num">' + n + '</span><div class="grow"><h2>' + title + "</h2><p>" + sub + "</p></div>" + (extra || "") + '</div><div class="card-body">' + body + "</div></section>";
   }
   function compareSwitch() {
+    if (!vis("comparar") && !Q.comparar) return "";
     return '<label class="switch" title="Mostrar duas opções de material lado a lado"><input type="checkbox" data-k="comparar"' + (Q.comparar ? " checked" : "") + ' data-rerender="1"><span class="track"></span><span class="switch-text">Comparar 2 opções<small class="hide-xs">de material</small></span></label>';
   }
   function formCliente() {
     return '<div class="grid g3">' +
       fld("Nome do orçamento", "titulo", Q.titulo, { ph: defaultTitle(Q), cls: "span3", id: "f-titulo", hint: "Aparece na lista de orçamentos e no nome do PDF. Em branco, usamos o sugerido." }) +
       fld("Nome do cliente", "cliente.nome", Q.cliente.nome, { req: true, ph: "Ex.: Carla Mendes", cls: "span2", id: "f-cliente", ac: "name" }) +
-      fld("WhatsApp do cliente", "cliente.tel", Q.cliente.tel, { type: "tel", mode: "tel", ph: "(00) 99999-9999", ac: "tel" }) +
-      fld("Arquiteto(a) ou designer", "arquiteto", Q.arquiteto, { ph: "Opcional" }) +
-      fld("E-mail do cliente", "cliente.email", Q.cliente.email, { type: "email", mode: "email", ph: "Opcional" }) +
+      (vis("cliente.tel") ? fld("WhatsApp do cliente", "cliente.tel", Q.cliente.tel, { type: "tel", mode: "tel", ph: "(00) 99999-9999", ac: "tel" }) : "") +
+      (vis("arquiteto") ? fld("Arquiteto(a) ou designer", "arquiteto", Q.arquiteto, { ph: "Opcional" }) : "") +
+      (vis("cliente.email") ? fld("E-mail do cliente", "cliente.email", Q.cliente.email, { type: "email", mode: "email", ph: "Opcional" }) : "") +
       fld("Data do orçamento", "data", Q.data, { type: "date" }) +
-      fld("Endereço da obra", "obra.endereco", Q.obra.endereco, { ph: "Rua, número, condomínio", cls: "span2" }) +
-      fld("Bairro", "obra.bairro", Q.obra.bairro, {}) +
-      fld("Cidade", "obra.cidade", Q.obra.cidade, { ph: "Ex.: Cidade/UF" }) +
-      fld("Vendedor responsável", "vendedor.nome", Q.vendedor.nome, { list: "dl-vend", ph: "Seu nome" }) +
-      fld("WhatsApp do vendedor", "vendedor.tel", Q.vendedor.tel, { type: "tel", mode: "tel", ph: "(00) 99999-9999" }) +
+      (vis("obra.endereco") ? fld("Endereço da obra", "obra.endereco", Q.obra.endereco, { ph: "Rua, número, condomínio", cls: "span2" }) : "") +
+      (vis("obra.bairro") ? fld("Bairro", "obra.bairro", Q.obra.bairro, {}) : "") +
+      (vis("obra.cidade") ? fld("Cidade", "obra.cidade", Q.obra.cidade, { ph: "Ex.: Cidade/UF" }) : "") +
+      (vis("vendedor") ? fld("Vendedor responsável", "vendedor.nome", Q.vendedor.nome, { list: "dl-vend", ph: "Seu nome" }) +
+        fld("WhatsApp do vendedor", "vendedor.tel", Q.vendedor.tel, { type: "tel", mode: "tel", ph: "(00) 99999-9999" }) : "") +
+      extrasDe("cliente").map(function (e) { return fldExtra(e, "extras." + e.id, Q.extras[e.id]); }).join("") +
       "</div>";
   }
   function formAmbientes() {
@@ -397,19 +430,19 @@
   function formItem(ai, ii, it) {
     var p = "ambientes." + ai + ".itens." + ii + ".";
     var area = itemArea(it);
-    var chips = DETALHES.map(function (d) {
+    var chips = LISTA("detalhes").map(function (d) {
       var on = it.detalhes.indexOf(d) > -1;
       return '<button type="button" class="chip' + (on ? " on" : "") + '" data-act="det" data-a="' + ai + '" data-i="' + ii + '" data-v="' + esc(d) + '" aria-pressed="' + on + '">' + (on ? ico("check") : "") + esc(d) + "</button>";
     }).join("");
     var optA =
       '<div class="opt-box"><div class="opt-title">' + (Q.comparar ? esc(Q.opcoes[0] || "Opção 1") : "Material e valor") + "</div>" +
       '<div class="opt-row">' + fld("Material", p + "matA", it.matA, { list: "dl-mat", ph: "Ex.: Quartzito Taj Mahal" }) +
-      '<div class="grid g2">' + fld("R$ por m² <small>(opcional)</small>", p + "precoA", it.precoA, { mode: "decimal", prefix: "R$", ph: "0,00" }) +
+      '<div class="grid g2">' + (vis("peca.precoM2") ? fld("R$ por m² <small>(opcional)</small>", p + "precoA", it.precoA, { mode: "decimal", prefix: "R$", ph: "0,00" }) : "") +
       fld("Valor da peça", p + "valA", it.valA, { mode: "decimal", prefix: "R$", ph: "0,00", req: true }) + "</div></div></div>";
     var optB = Q.comparar ?
       '<div class="opt-box"><div class="opt-title">' + esc(Q.opcoes[1] || "Opção 2") + "</div>" +
       '<div class="opt-row">' + fld("Material", p + "matB", it.matB, { list: "dl-mat", ph: "Em branco = igual à opção 1" }) +
-      '<div class="grid g2">' + fld("R$ por m² <small>(opcional)</small>", p + "precoB", it.precoB, { mode: "decimal", prefix: "R$", ph: "0,00" }) +
+      '<div class="grid g2">' + (vis("peca.precoM2") ? fld("R$ por m² <small>(opcional)</small>", p + "precoB", it.precoB, { mode: "decimal", prefix: "R$", ph: "0,00" }) : "") +
       fld("Valor da peça", p + "valB", it.valB, { mode: "decimal", prefix: "R$", ph: "0,00" }) + "</div></div>" +
       '<div class="subnote">Deixe material e valor em branco se esta peça for igual nas duas opções.</div></div>' : "";
     return '<div class="item"><div class="item-top"><span class="tag">Peça ' + (ii + 1) + '</span><span class="item-area" data-area="' + ai + "-" + ii + '">' + (area ? num(area, 2) + " m²" : "") + '</span><span class="grow"></span>' +
@@ -419,16 +452,19 @@
       fld("Peça", p + "peca", it.peca, { list: "dl-peca", ph: "Ex.: Bancada" }) +
       fld("Comprimento", p + "comp", it.comp, { mode: "decimal", suffix: "m", ph: "1,90" }) +
       fld("Largura", p + "larg", it.larg, { mode: "decimal", suffix: "m", ph: "0,65" }) +
-      fld("Quantidade", p + "qtd", it.qtd, { mode: "numeric", ph: "1" }) +
-      fld("Espessura", p + "espessura", it.espessura, { list: "dl-esp" }) +
-      fld("Acabamento", p + "acabamento", it.acabamento, { list: "dl-acab" }) +
-      fld("Observação da peça", p + "obs", it.obs, { ph: "Ex.: recorte para cuba de embutir 50 cm", cls: "span2" }) +
-      '</div><div class="field" style="margin-bottom:14px"><span>Detalhes de acabamento</span><div class="chips">' + chips + "</div></div>" +
+      (vis("peca.qtd") ? fld("Quantidade", p + "qtd", it.qtd, { mode: "numeric", ph: "1" }) : "") +
+      (vis("peca.espessura") ? fld("Espessura", p + "espessura", it.espessura, { list: "dl-esp" }) : "") +
+      (vis("peca.acabamento") ? fld("Acabamento", p + "acabamento", it.acabamento, { list: "dl-acab" }) : "") +
+      (vis("peca.obs") ? fld("Observação da peça", p + "obs", it.obs, { ph: "Ex.: recorte para cuba de embutir 50 cm", cls: "span2" }) : "") +
+      extrasDe("peca").map(function (e) { return fldExtra(e, p + "extras." + e.id, (it.extras || {})[e.id]); }).join("") +
+      "</div>" + (vis("peca.detalhes") ? '<div class="field" style="margin-bottom:14px"><span>Detalhes de acabamento</span><div class="chips">' + chips + "</div></div>" : "") +
       '<div class="grid" style="gap:12px">' + optA + optB + "</div>" +
-      '<div class="subnote" style="margin-top:8px">Medidas em metros (1,90) ou centímetros (190). Preencha o R$/m² para o valor ser calculado sozinho.</div></div>';
+      '<div class="subnote" style="margin-top:8px">Medidas em metros (1,90) ou centímetros (190).' + (vis("peca.precoM2") ? " Preencha o R$/m² para o valor ser calculado sozinho." : "") + "</div></div>";
   }
   function formServicos() {
-    var h = '<div class="row-list">';
+    var h = "";
+    if (vis("servicos")) {
+    h += '<div class="row-list">';
     Q.servicos.forEach(function (s, i) {
       h += '<div class="srv"><input class="srv-desc" type="text" data-k="servicos.' + i + '.desc" value="' + esc(s.desc) + '" placeholder="Descrição do serviço" aria-label="Descrição do serviço" autocomplete="off">' +
         '<div class="input-affix srv-val"><span class="affix">R$</span><input type="text" inputmode="decimal" data-k="servicos.' + i + '.valor" value="' + esc(s.valor) + '" placeholder="0,00" aria-label="Valor"' + (s.incluso ? " disabled" : "") + "></div>" +
@@ -436,7 +472,8 @@
         '<button class="icon-btn danger" data-act="delSrv" data-i="' + i + '" aria-label="Remover serviço">' + ico("trash") + "</button></div>";
     });
     h += '</div><div class="add-row" style="margin:12px 0 22px"><button class="btn sm" data-act="addSrv">' + ico("plus") + "Adicionar serviço</button></div>";
-    h += '<div class="grid g3" style="margin-bottom:20px"><label class="field"><span>Tipo de desconto</span><select data-k="desconto.tipo"><option value="%"' + (Q.desconto.tipo === "%" ? " selected" : "") + '>Porcentagem (%)</option><option value="R$"' + (Q.desconto.tipo === "R$" ? " selected" : "") + ">Valor (R$)</option></select></label>" +
+    }
+    if (vis("desconto")) h += '<div class="grid g3" style="margin-bottom:20px"><label class="field"><span>Tipo de desconto</span><select data-k="desconto.tipo"><option value="%"' + (Q.desconto.tipo === "%" ? " selected" : "") + '>Porcentagem (%)</option><option value="R$"' + (Q.desconto.tipo === "R$" ? " selected" : "") + ">Valor (R$)</option></select></label>" +
       fld("Desconto", "desconto.valor", Q.desconto.valor, { mode: "decimal", ph: "0" }) + "</div>";
     h += '<div id="sum-box"></div>';
     return h;
@@ -444,10 +481,13 @@
   function formCondicoes() {
     var h = '<div class="grid g3" style="margin-bottom:12px">' +
       fld("Validade (dias)", "validadeDias", Q.validadeDias, { mode: "numeric", hint: '<span id="val-date"></span>' }) +
-      fld("Prazo de produção", "prazo", Q.prazo, { cls: "span2", ph: "Ex.: 15 dias úteis após a medição" }) + "</div>";
+      (vis("prazo") ? fld("Prazo de produção", "prazo", Q.prazo, { cls: "span2", ph: "Ex.: 15 dias úteis após a medição" }) : "") +
+      extrasDe("condicoes").map(function (e) { return fldExtra(e, "extras." + e.id, Q.extras[e.id]); }).join("") + "</div>";
+    if (vis("pagamento")) {
     h += '<label class="field" style="margin-bottom:8px"><span>Forma de pagamento</span><textarea data-k="pagamento" rows="2" style="min-height:64px" placeholder="Como o cliente pode pagar">' + esc(Q.pagamento) + "</textarea></label>";
-    h += '<div class="chips" style="margin-bottom:22px">' + PAGAMENTOS.map(function (p) { return '<button type="button" class="chip" data-act="pay" data-v="' + esc(p) + '">' + esc(p) + "</button>"; }).join("") + "</div>";
-    h += '<div class="two-col">' + incList("inclusos", "O que está incluso") + incList("naoInclusos", "O que não está incluso") + "</div>";
+    h += '<div class="chips" style="margin-bottom:22px">' + LISTA("pagamentos").map(function (p) { return '<button type="button" class="chip" data-act="pay" data-v="' + esc(p) + '">' + esc(p) + "</button>"; }).join("") + "</div>";
+    }
+    if (vis("inclusos")) h += '<div class="two-col">' + incList("inclusos", "O que está incluso") + incList("naoInclusos", "O que não está incluso") + "</div>";
     return h;
   }
   function incList(key, title) {
@@ -460,7 +500,9 @@
     return h + '</div><button class="btn sm ghost" style="margin-top:8px" data-act="addInc" data-key="' + key + '">' + ico("plus") + "Adicionar item</button></div>";
   }
   function formExtras() {
-    var h = '<div class="img-grid" style="margin-bottom:18px">';
+    var h = "";
+    if (vis("imagens")) {
+    h += '<div class="img-grid" style="margin-bottom:18px">';
     Q.imagens.forEach(function (im, i) {
       h += '<div class="img-card"><img src="' + im.src + '" alt=""><div class="img-meta"><input type="text" data-k="imagens.' + i + '.legenda" value="' + esc(im.legenda) + '" placeholder="Legenda (ex.: projeto da cozinha)" aria-label="Legenda da imagem" autocomplete="off">' +
         '<button class="icon-btn danger" data-act="delImg" data-i="' + i + '" aria-label="Remover imagem">' + ico("trash") + "</button></div></div>";
@@ -470,9 +512,10 @@
         '<input type="file" accept="image/*" multiple hidden id="img-input"></label>';
     }
     h += "</div>";
-    h += '<label class="switch" style="margin-bottom:18px"><input type="checkbox" data-k="explicarMateriais"' + (Q.explicarMateriais ? " checked" : "") + '><span class="track"></span><span class="switch-text">Explicar os materiais no orçamento<small>Inclui um resumo de cada pedra (resistência, cuidados) para o cliente entender a diferença de preço.</small></span></label>';
-    h += '<label class="field" style="margin-bottom:16px"><span>Observações para o cliente</span><textarea data-k="observacoes" placeholder="Ex.: valores consideram a chapa reservada do lote atual.">' + esc(Q.observacoes) + "</textarea></label>";
-    h += '<label class="field"><span>Condições gerais <small>(uma por linha)</small></span><textarea data-k="termos" rows="6">' + esc(Q.termos) + "</textarea></label>";
+    }
+    if (vis("explicarMateriais")) h += '<label class="switch" style="margin-bottom:18px"><input type="checkbox" data-k="explicarMateriais"' + (Q.explicarMateriais ? " checked" : "") + '><span class="track"></span><span class="switch-text">Explicar os materiais no orçamento<small>Inclui um resumo de cada pedra (resistência, cuidados) para o cliente entender a diferença de preço.</small></span></label>';
+    if (vis("observacoes")) h += '<label class="field" style="margin-bottom:16px"><span>Observações para o cliente</span><textarea data-k="observacoes" placeholder="Ex.: valores consideram a chapa reservada do lote atual.">' + esc(Q.observacoes) + "</textarea></label>";
+    if (vis("termos")) h += '<label class="field"><span>Condições gerais <small>(uma por linha)</small></span><textarea data-k="termos" rows="6">' + esc(Q.termos) + "</textarea></label>";
     return h;
   }
 
@@ -633,12 +676,22 @@
       });
     });
     if (!Q.ambientes.length || !Q.ambientes.some(function (a) { return a.itens.length; })) { toast("Adicione pelo menos uma peça ao orçamento."); return; }
+    var faltando = null;
+    extrasDe("cliente").concat(extrasDe("condicoes")).forEach(function (e) {
+      if (e.obrigatorio && !String(Q.extras[e.id] || "").trim()) { var el = $('[data-k="extras.' + e.id + '"]'); if (el) { el.classList.add("invalid"); problems.push(el); } faltando = faltando || e.nome; }
+    });
+    extrasDe("peca").forEach(function (e) {
+      if (!e.obrigatorio) return;
+      Q.ambientes.forEach(function (a, ai) { a.itens.forEach(function (it, ii) {
+        if (!String((it.extras || {})[e.id] || "").trim()) { var el = $('[data-k="ambientes.' + ai + ".itens." + ii + ".extras." + e.id + '"]'); if (el) { el.classList.add("invalid"); problems.push(el); } faltando = faltando || e.nome; }
+      }); });
+    });
     problems = problems.filter(Boolean);
     if (problems.length) {
       problems.forEach(function (el) { el.classList.add("invalid"); });
       problems[0].scrollIntoView({ behavior: "smooth", block: "center" });
       setTimeout(function () { problems[0].focus({ preventScroll: true }); }, 350);
-      toast(!String(Q.cliente.nome).trim() ? "Preencha o nome do cliente." : "Preencha o valor de todas as peças.");
+      toast(!String(Q.cliente.nome).trim() ? "Preencha o nome do cliente." : faltando ? "Preencha o campo “" + faltando + "”." : "Preencha o valor de todas as peças.");
       return;
     }
     if (!anyItem) return;
@@ -677,9 +730,12 @@
     h += '<div class="doc-title">' + esc(titleOf(q)) + "</div>";
     h += '<p class="doc-hello">Olá, <strong>' + esc(fn) + "</strong>! Preparamos esta proposta com base no projeto e nas medidas que conversamos. Abaixo estão as peças de cada ambiente, o que está incluso e as condições. Qualquer dúvida, é só chamar" + (q.vendedor.nome ? " " + esc(firstName(q.vendedor.nome)) : " a nossa equipe") + ".</p>";
 
-    var cells = [["Cliente", q.cliente.nome], ["WhatsApp", q.cliente.tel], ["E-mail", q.cliente.email], ["Arquiteto(a)", q.arquiteto],
-      ["Responsável", [q.vendedor.nome, q.vendedor.tel].filter(Boolean).join(" · ")], ["Validade", "Até " + fmtDate(validade)]].filter(function (x) { return String(x[1] || "").trim(); });
-    var addr = [q.obra.endereco, q.obra.bairro, q.obra.cidade].filter(function (x) { return String(x || "").trim(); }).join(" · ");
+    var qx = q.extras || {};
+    var cells = [["Cliente", q.cliente.nome], ["WhatsApp", vis("cliente.tel") ? q.cliente.tel : ""], ["E-mail", vis("cliente.email") ? q.cliente.email : ""], ["Arquiteto(a)", vis("arquiteto") ? q.arquiteto : ""],
+      ["Responsável", vis("vendedor") ? [q.vendedor.nome, q.vendedor.tel].filter(Boolean).join(" · ") : ""]]
+      .concat(extrasDe("cliente").filter(function (x) { return x.pdf; }).map(function (x) { return [esc(x.nome), extraTexto(x, qx[x.id])]; }))
+      .concat([["Validade", "Até " + fmtDate(validade)]]).filter(function (x) { return String(x[1] || "").trim(); });
+    var addr = [vis("obra.endereco") ? q.obra.endereco : "", vis("obra.bairro") ? q.obra.bairro : "", vis("obra.cidade") ? q.obra.cidade : ""].filter(function (x) { return String(x || "").trim(); }).join(" · ");
     h += '<div class="doc-info">';
     cells.forEach(function (x, i) {
       var span = "";
@@ -700,12 +756,13 @@
         '<th style="width:31%">Peça</th><th style="width:15%">Medidas</th><th style="width:27%">' + esc(o1) + '</th><th style="width:27%">' + esc(o2) + "</th>" :
         '<th style="width:40%">Peça</th><th style="width:17%">Medidas</th><th style="width:28%">Material</th><th class="r" style="width:15%">Valor</th>') + "</tr></thead><tbody>";
       a.itens.forEach(function (it) {
-        var area = itemArea(it), q2 = parseNum(it.qtd) || 1;
-        var det = it.detalhes.slice(); if (String(it.obs || "").trim()) det.push(it.obs.trim());
+        var area = itemArea(it), q2 = vis("peca.qtd") ? (parseNum(it.qtd) || 1) : 1;
+        var det = vis("peca.detalhes") ? it.detalhes.slice() : []; if (vis("peca.obs") && String(it.obs || "").trim()) det.push(it.obs.trim());
+        extrasDe("peca").forEach(function (x) { var v = x.pdf ? extraTexto(x, (it.extras || {})[x.id]) : ""; if (v) det.push(x.nome + ": " + v); });
         var peca = '<div class="peca">' + esc(it.peca || "Peça") + "</div>" + (det.length ? '<div class="det">' + esc(det.join(" · ")) + "</div>" : "");
         var meas = '<td class="meas">' + (meters(it.comp) && meters(it.larg) ? num(meters(it.comp), 2) + " × " + num(meters(it.larg), 2) + " m" : "–") +
           (q2 > 1 ? "<small>" + q2 + " unidades</small>" : "") + (area ? "<small>" + num(area, 2) + " m²</small>" : "") + "</td>";
-        var sub = [it.acabamento, it.espessura].filter(function (x) { return String(x || "").trim(); }).join(" · ");
+        var sub = [vis("peca.acabamento") ? it.acabamento : "", vis("peca.espessura") ? it.espessura : ""].filter(function (x) { return String(x || "").trim(); }).join(" · ");
         var matCell = function (m, v) {
           return '<td><div class="mat">' + esc(m || "A definir") + (sub ? "<small>" + esc(sub) + "</small>" : "") + '</div><div class="val" style="margin-top:4px">' + money(v) + "</div></td>";
         };
@@ -720,7 +777,7 @@
     });
 
     // Serviços
-    var srv = q.servicos.filter(function (s) { return String(s.desc || "").trim(); });
+    var srv = vis("servicos") ? q.servicos.filter(function (s) { return String(s.desc || "").trim(); }) : [];
     if (srv.length) {
       h += '<div class="doc-sec"><div class="doc-sec-title"><h3>Serviços</h3></div><table class="doc-table" style="border-top:1px solid #e3dccf"><tbody>';
       srv.forEach(function (s) { h += "<tr><td>" + esc(s.desc) + '</td><td class="r val">' + (s.incluso ? '<span style="color:#2f7a4f">Incluso</span>' : money(parseNum(s.valor))) + "</td></tr>"; });
@@ -732,7 +789,7 @@
       var x = c[k];
       return '<div class="doc-total-card"><div class="h">' + esc(label) + '</div><div class="rows">' +
         '<div class="row"><span>Peças</span><span>' + money(pecas) + "</span></div>" +
-        (c.serv ? '<div class="row"><span>Serviços</span><span>' + money(c.serv) + "</span></div>" : '<div class="row"><span>Serviços</span><span>Incluso</span></div>') +
+        (!vis("servicos") ? "" : c.serv ? '<div class="row"><span>Serviços</span><span>' + money(c.serv) + "</span></div>" : '<div class="row"><span>Serviços</span><span>Incluso</span></div>') +
         (x.desc ? '<div class="row neg"><span>Desconto' + (q.desconto.tipo === "%" ? " (" + num(parseNum(q.desconto.valor), 0) + "%)" : "") + "</span><span>− " + money(x.desc) + "</span></div>" : "") +
         '</div><div class="grand"><span>Total</span><strong>' + money(x.total) + "</strong></div></div>";
     }
@@ -740,12 +797,15 @@
       (cmp ? totalCard(o1, "A", c.pecasA) + totalCard(o2, "B", c.pecasB) : totalCard("Resumo do investimento", "A", c.pecasA)) + "</div></div>";
 
     // Condições
+    var conds = [];
+    if (vis("pagamento")) conds.push(["Pagamento", esc(q.pagamento || "A combinar")]);
+    if (vis("prazo")) conds.push(["Prazo de produção", esc(q.prazo || "A combinar")]);
+    conds.push(["Validade da proposta", (parseInt(q.validadeDias, 10) || 0) + " dias · até " + fmtDate(validade)]);
+    extrasDe("condicoes").forEach(function (x) { var v = x.pdf ? extraTexto(x, qx[x.id]) : ""; if (v) conds.push([esc(x.nome), esc(v)]); });
     h += '<div class="doc-sec"><div class="doc-sec-title"><h3>Condições</h3></div><div class="doc-cond">' +
-      '<div><div class="k">Pagamento</div><div class="v">' + esc(q.pagamento || "A combinar") + "</div></div>" +
-      '<div><div class="k">Prazo de produção</div><div class="v">' + esc(q.prazo || "A combinar") + "</div></div>" +
-      '<div><div class="k">Validade da proposta</div><div class="v">' + (parseInt(q.validadeDias, 10) || 0) + " dias · até " + fmtDate(validade) + "</div></div></div></div>";
+      conds.map(function (x) { return '<div><div class="k">' + x[0] + '</div><div class="v">' + x[1] + "</div></div>"; }).join("") + "</div></div>";
 
-    var inc = q.inclusos.filter(function (x) { return x.on && String(x.t).trim(); }), ninc = q.naoInclusos.filter(function (x) { return x.on && String(x.t).trim(); });
+    var inc = vis("inclusos") ? q.inclusos.filter(function (x) { return x.on && String(x.t).trim(); }) : [], ninc = vis("inclusos") ? q.naoInclusos.filter(function (x) { return x.on && String(x.t).trim(); }) : [];
     if (inc.length || ninc.length) {
       var li = function (arr, ic) { return arr.map(function (x) { return '<li><svg viewBox="0 0 24 24">' + ICON[ic] + "</svg><span>" + esc(x.t) + "</span></li>"; }).join(""); };
       h += '<div class="doc-sec"><div class="doc-inc">' +
@@ -754,7 +814,7 @@
     }
 
     // Materiais
-    if (q.explicarMateriais) {
+    if (q.explicarMateriais && vis("explicarMateriais")) {
       var seen = {}, mats = [];
       q.ambientes.forEach(function (a) { a.itens.forEach(function (it) { [it.matA, q.comparar ? it.matB : ""].forEach(function (m) { m = String(m || "").trim(); if (m && !seen[m.toLowerCase()]) { seen[m.toLowerCase()] = 1; var inf = matInfo(m); if (inf) mats.push([m, inf]); } }); }); });
       if (mats.length) {
@@ -762,15 +822,15 @@
           mats.map(function (m) { return '<div class="doc-mat"><div><b>' + esc(m[0]) + "</b><span>" + esc(m[1]) + "</span></div></div>"; }).join("") + "</div></div>";
       }
     }
-    if (String(q.observacoes || "").trim()) h += '<div class="doc-sec"><div class="doc-sec-title"><h3>Observações</h3></div><div class="doc-obs">' + esc(q.observacoes.trim()) + "</div></div>";
-    if (q.imagens.length) {
+    if (vis("observacoes") && String(q.observacoes || "").trim()) h += '<div class="doc-sec"><div class="doc-sec-title"><h3>Observações</h3></div><div class="doc-obs">' + esc(q.observacoes.trim()) + "</div></div>";
+    if (vis("imagens") && q.imagens.length) {
       h += '<div class="doc-sec-title"><h3>Imagens e referências</h3></div><div class="doc-imgs" style="margin-bottom:22px">' +
         q.imagens.map(function (im) { return '<figure class="doc-img" style="margin:0"><img src="' + im.src + '" alt="">' + (String(im.legenda || "").trim() ? '<figcaption class="cap">' + esc(im.legenda) + "</figcaption>" : "") + "</figure>"; }).join("") + "</div>";
     }
     var termos = String(q.termos || "").split("\n").map(function (t) { return t.trim(); }).filter(Boolean);
-    if (termos.length) h += '<div class="doc-sec"><div class="doc-sec-title"><h3>Condições gerais</h3></div><ol class="doc-terms">' + termos.map(function (t) { return "<li>" + esc(t) + "</li>"; }).join("") + "</ol></div>";
+    if (vis("termos") && termos.length) h += '<div class="doc-sec"><div class="doc-sec-title"><h3>Condições gerais</h3></div><ol class="doc-terms">' + termos.map(function (t) { return "<li>" + esc(t) + "</li>"; }).join("") + "</ol></div>";
 
-    h += '<div class="doc-sign"><div><b>' + esc(q.cliente.nome) + "</b>De acordo · data ____/____/______</div><div><b>" + esc(e.nome) + "</b>" + esc(q.vendedor.nome || "Responsável") + "</div></div>";
+    if (vis("assinatura")) h += '<div class="doc-sign"><div><b>' + esc(q.cliente.nome) + "</b>De acordo · data ____/____/______</div><div><b>" + esc(e.nome) + "</b>" + esc(q.vendedor.nome || "Responsável") + "</div></div>";
     h += "</div>";
     var foot = [["", e.nome], ["CNPJ", e.cnpj], ["WhatsApp", e.whatsapp], ["Instagram", e.instagram], ["E-mail", e.email], ["", [e.endereco, e.cidade].filter(Boolean).join(" · ")]].filter(function (x) { return String(x[1] || "").trim(); });
     h += '<footer class="doc-foot">' + foot.map(function (x) { return "<span>" + (x[0] ? x[0] + " " : "") + (x[0] ? esc(x[1]) : "<b>" + esc(x[1]) + "</b>") + "</span>"; }).join("") + "</footer>";
@@ -961,7 +1021,7 @@
         (q.updatedAt && q.createdAt && q.updatedAt - q.createdAt > 60000 ? " · editado em " + fmtDate(new Date(q.updatedAt)) : "") + "</div></div>" +
         '<div class="q-total">' + totalLabel(q) + "</div>" +
         '<div class="q-actions"><select data-st="' + q.id + '" aria-label="Status"><option value="aberto"' + (st === "aberto" ? " selected" : "") + '>Em aberto</option><option value="fechou"' + (st === "fechou" ? " selected" : "") + '>Fechou</option><option value="perdeu"' + (st === "perdeu" ? " selected" : "") + ">Perdeu</option></select>" +
-        (st === "perdeu" ? '<select data-mot="' + q.id + '" aria-label="Motivo da perda"><option value="">Motivo da perda…</option>' + MOTIVOS.map(function (m) { return "<option" + (q.motivo === m ? " selected" : "") + ">" + m + "</option>"; }).join("") + "</select>" : "") +
+        (st === "perdeu" ? '<select data-mot="' + q.id + '" aria-label="Motivo da perda"><option value="">Motivo da perda…</option>' + LISTA("motivos").map(function (m) { return "<option" + (q.motivo === m ? " selected" : "") + ">" + m + "</option>"; }).join("") + "</select>" : "") +
         '<span class="grow"></span>' +
         '<a class="btn sm" href="#/orcamento/' + q.id + '">' + ico("eye") + "Abrir</a>" +
         '<a class="btn sm" href="#/editar/' + q.id + '">' + ico("edit") + '<span class="hide-xs">Editar</span></a>' +

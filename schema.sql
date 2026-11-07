@@ -16,6 +16,7 @@ create table if not exists plataforma.tenants (
   criado_por text not null default '',
   squad text not null default '',
   senha text,
+  campos jsonb not null default '{}'::jsonb,
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now()
 );
