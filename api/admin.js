@@ -3,19 +3,19 @@
 //   GET  list             → marmorarias com números
 //   GET  get&id=          → uma marmoraria (com logo) para editar
 //   GET  slug&slug=       → link disponível?
-//   POST create           { nome, slug, empresa, logo, tema, senha, criadoPor }
-//   PUT  update&id=       { nome, slug, empresa, logo, tema, ativo }
+//   POST create           { nome, slug, empresa, logo, tema, senha, squad }
+//   PUT  update&id=       { nome, slug, empresa, logo, tema, ativo, squad, senha? }
 //   POST password&id=     { senha }
 //   DELETE delete&id=     { confirmar: slug }
 import crypto from "node:crypto";
 import {
   handle, send, readBody, db, tx, T, q, str, HttpError, requireAdmin, checkAdminPassword, adminToken, slow,
-  hashPassword, slugify, validSlug, cleanTema, cleanLogo, cleanEmpresa
+  hashPassword, slugify, validSlug, cleanTema, cleanLogo, cleanEmpresa, cleanSquad
 } from "../lib/db.js";
 
 function pub(r) {
   return {
-    id: r.id, slug: r.slug, nome: r.nome, ativo: r.ativo, tema: r.tema || {}, criadoPor: r.criado_por,
+    id: r.id, slug: r.slug, nome: r.nome, ativo: r.ativo, tema: r.tema || {}, squad: r.squad || "", senha: r.senha || "",
     empresa: (r.settings && r.settings.empresa) || {}, createdAt: new Date(r.created_at).getTime(), updatedAt: new Date(r.updated_at).getTime(),
     logoUrl: r.tem_logo ? "/api/logo?slug=" + encodeURIComponent(r.slug) + "&v=" + Math.floor(new Date(r.updated_at).getTime() / 1000) : null
   };
@@ -42,7 +42,7 @@ export default handle(async (req, res) => {
 
   if (action === "list" && req.method === "GET") {
     const { rows } = await pool.query(
-      `select t.id, t.slug, t.nome, t.ativo, t.tema, t.settings, t.criado_por, t.created_at, t.updated_at, (t.logo is not null) as tem_logo,
+      `select t.id, t.slug, t.nome, t.ativo, t.tema, t.settings, t.squad, t.senha, t.created_at, t.updated_at, (t.logo is not null) as tem_logo,
               count(o.id)::int as total,
               count(o.id) filter (where o.status = 'aberto')::int as abertos,
               count(o.id) filter (where o.status = 'fechou')::int as fechados,
@@ -83,9 +83,9 @@ export default handle(async (req, res) => {
     const settings = { empresa, proximoNumero: 1 };
     try {
       const { rows } = await pool.query(
-        `insert into ${T.tenants} (id, slug, nome, senha_hash, logo, tema, settings, criado_por)
-         values ($1, $2, $3, $4, $5, $6::jsonb, $7::jsonb, $8) returning *, (logo is not null) as tem_logo`,
-        [crypto.randomUUID(), slug, nome, hashPassword(senha), cleanLogo(b.logo), JSON.stringify(cleanTema(b.tema)), JSON.stringify(settings), str(b.criadoPor, 80)]);
+        `insert into ${T.tenants} (id, slug, nome, senha_hash, senha, logo, tema, settings, squad)
+         values ($1, $2, $3, $4, $5, $6, $7::jsonb, $8::jsonb, $9) returning *, (logo is not null) as tem_logo`,
+        [crypto.randomUUID(), slug, nome, hashPassword(senha), senha, cleanLogo(b.logo), JSON.stringify(cleanTema(b.tema)), JSON.stringify(settings), cleanSquad(b.squad)]);
       return send(res, 200, pub(rows[0]));
     } catch (e) {
       if (e && e.code === "23505") throw new HttpError(409, "Esse link já está em uso. Escolha outro.");
@@ -108,11 +108,16 @@ export default handle(async (req, res) => {
       const logo = b.logo === undefined ? t.logo : cleanLogo(b.logo);
       const tema = b.tema ? cleanTema(b.tema) : t.tema;
       const ativo = b.ativo == null ? t.ativo : !!b.ativo;
+      const squad = b.squad == null ? t.squad : cleanSquad(b.squad);
+      // senha nova só quando foi alterada: troca o acesso e desconecta quem estava logado
+      const novaSenha = b.senha != null && String(b.senha) !== String(t.senha || "") ? checkSenha(b.senha) : null;
       try {
         const { rows } = await c.query(
-          `update ${T.tenants} set nome = $2, slug = $3, logo = $4, tema = $5::jsonb, settings = $6::jsonb, ativo = $7, updated_at = now()
+          `update ${T.tenants} set nome = $2, slug = $3, logo = $4, tema = $5::jsonb, settings = $6::jsonb, ativo = $7, squad = $8,
+             senha = coalesce($9, senha), senha_hash = coalesce($10, senha_hash),
+             token_version = token_version + (case when $9::text is null then 0 else 1 end), updated_at = now()
            where id = $1 returning *, (logo is not null) as tem_logo`,
-          [id, nome, slug, logo, JSON.stringify(tema), JSON.stringify(settings), ativo]);
+          [id, nome, slug, logo, JSON.stringify(tema), JSON.stringify(settings), ativo, squad, novaSenha, novaSenha ? hashPassword(novaSenha) : null]);
         return rows[0];
       } catch (e) {
         if (e && e.code === "23505") throw new HttpError(409, "Esse link já está em uso. Escolha outro.");
@@ -125,7 +130,7 @@ export default handle(async (req, res) => {
   if (action === "password" && req.method === "POST") {
     const senha = checkSenha(readBody(req).senha);
     const { rowCount } = await pool.query(
-      `update ${T.tenants} set senha_hash = $2, token_version = token_version + 1, updated_at = now() where id = $1`, [id, hashPassword(senha)]);
+      `update ${T.tenants} set senha_hash = $2, senha = $3, token_version = token_version + 1, updated_at = now() where id = $1`, [id, hashPassword(senha), senha]);
     if (!rowCount) throw new HttpError(404, "Marmoraria não encontrada.");
     return send(res, 200, { ok: true });
   }

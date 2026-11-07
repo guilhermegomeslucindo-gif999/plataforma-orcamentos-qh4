@@ -111,3 +111,20 @@ body.painel{
 .m-actions .grow{flex-basis:100%;height:0}
 .m-actions .grow + .icon-btn{margin-left:auto}
 .m-actions .icon-btn{border:1px solid var(--line)}
+
+/* Squad e acesso */
+.squad-tag{display:inline-block;font-size:11px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;background:var(--ink);color:#fff;padding:2px 9px;border-radius:999px}
+.squad-tag.none{background:#eee;color:#777}
+.m-access{margin:0 16px 12px;background:#faf8f6;border-radius:10px;padding:2px 4px 2px 12px}
+.m-access .row{display:flex;align-items:center;gap:10px;min-height:38px;border-bottom:1px solid var(--line)}
+.m-access .row:last-child{border-bottom:none}
+.m-access .k{width:48px;flex:none;font-size:11px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:var(--muted)}
+.m-access .v{flex:1;min-width:0;font-weight:600;font-size:14px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.m-access .v i{font-weight:500;color:var(--muted);font-size:13px}
+.m-access .icon-btn{width:34px;height:34px}
+.toolbar .seg{flex:none}
+.toolbar .seg button{padding:9px 12px}
+@media (max-width:640px){.toolbar .seg{width:100%;display:grid;grid-template-columns:repeat(5,1fr)}.toolbar .seg button{padding:9px 4px;font-size:13px}}
+.invalid-field .seg{border-color:var(--bad);box-shadow:0 0 0 3px rgba(176,65,46,.12)}
+[data-squad] button{min-width:84px}
+@media (max-width:480px){[data-squad]{display:grid;grid-template-columns:repeat(2,1fr);width:100%}}

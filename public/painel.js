@@ -183,7 +183,7 @@
   });
 
   /* ---------- Lista ---------- */
-  var filtro = "";
+  var filtro = "", filtroSquad = "";
   function viewList() {
     if (!LIST) app.innerHTML = '<div class="loading"><span class="spin"></span>Carregando marmorarias…</div>'; else renderList();
     api("GET", "list").then(function (l) { LIST = l; if (!/^#\/(nova|editar)/.test(location.hash)) renderList(); },
@@ -206,13 +206,19 @@
       h += '<div class="empty"><strong>Nenhuma marmoraria cadastrada</strong>Cadastre a primeira para gerar o link do gerador de orçamentos.<div style="margin-top:14px"><a class="btn gold" href="#/nova">' + ico("plus") + "Nova marmoraria</a></div></div>";
       app.innerHTML = h; return;
     }
-    h += '<div class="toolbar"><input class="search" type="search" id="fs" placeholder="Buscar marmoraria" value="' + esc(filtro) + '" autocomplete="off"></div><div class="m-grid" id="mg"></div>';
+    h += '<div class="toolbar"><input class="search" type="search" id="fs" placeholder="Buscar marmoraria" value="' + esc(filtro) + '" autocomplete="off">' +
+      '<div class="seg" id="fsq">' + ["", "A", "B", "C", "D"].map(function (q) { return '<button type="button" data-q="' + q + '" class="' + (filtroSquad === q ? "on" : "") + '">' + (q ? "Squad " + q : "Todos") + "</button>"; }).join("") + "</div></div>" +
+      '<div class="m-grid" id="mg"></div>';
     app.innerHTML = h; renderCards();
     $("#fs").addEventListener("input", function (e) { filtro = e.target.value; renderCards(); });
+    $$("#fsq button").forEach(function (b) { b.addEventListener("click", function () { filtroSquad = b.dataset.q; $$("#fsq button").forEach(function (x) { x.classList.toggle("on", x === b); }); renderCards(); }); });
   }
   function renderCards() {
     var t = filtro.trim().toLowerCase();
-    var l = (LIST || []).filter(function (m) { return !t || (m.nome + " " + m.slug + " " + (m.empresa.cidade || "") + " " + (m.criadoPor || "")).toLowerCase().indexOf(t) > -1; });
+    var l = (LIST || []).filter(function (m) {
+      if (filtroSquad && m.squad !== filtroSquad) return false;
+      return !t || (m.nome + " " + m.slug + " " + (m.empresa.cidade || "") + " squad " + (m.squad || "")).toLowerCase().indexOf(t) > -1;
+    });
     var el = $("#mg"); if (!el) return;
     if (!l.length) { el.innerHTML = '<div class="empty" style="grid-column:1/-1"><strong>Nada encontrado</strong>Tente outra busca.</div>'; return; }
     el.innerHTML = l.map(function (m) {
@@ -221,8 +227,11 @@
       return '<div class="m-card' + (m.ativo ? "" : " off") + '"><div class="m-top"><div class="m-logo' + (dark ? " dark" : "") + '" style="--m-ink:' + esc(tm.escura) + ";--m-cor:" + esc(tm.cor) + '">' +
         (m.logoUrl ? '<img src="' + esc(m.logoUrl) + '" alt="">' : "<span>" + esc(m.nome.replace(/^marmoraria\s+/i, "").slice(0, 2).toUpperCase()) + "</span>") + "</div>" +
         '<div class="m-info"><p class="m-name">' + esc(m.nome) + (m.ativo ? "" : ' <span class="tag-off">Desativada</span>') + "</p>" +
+        '<div class="m-link">' + (m.squad ? '<span class="squad-tag">Squad ' + esc(m.squad) + "</span>" : '<span class="squad-tag none">Sem squad</span>') + "</div>" +
         '<div class="m-link"><span class="m-swatch" style="background:' + esc(tm.cor) + '"></span><code>/m/' + esc(m.slug) + "</code></div>" +
-        '<div class="m-link">' + esc([m.empresa.cidade, m.criadoPor ? "gestor: " + m.criadoPor : ""].filter(Boolean).join(" · ") || "Cadastrada em " + fmtDate(m.createdAt)) + "</div></div></div>" +
+        '<div class="m-link">' + esc(m.empresa.cidade || "Cadastrada em " + fmtDate(m.createdAt)) + "</div></div></div>" +
+        '<div class="m-access"><div class="row"><span class="k">Link</span><span class="v">' + esc(linkOf(m).replace(/^https?:\/\//, "")) + '</span><button class="icon-btn" data-copy="' + esc(linkOf(m)) + '" title="Copiar link" aria-label="Copiar link">' + ico("copy") + "</button></div>" +
+        '<div class="row"><span class="k">Senha</span><span class="v">' + (m.senha ? esc(m.senha) : '<i>não registrada · use “Trocar senha”</i>') + "</span>" + (m.senha ? '<button class="icon-btn" data-copy="' + esc(m.senha) + '" title="Copiar senha" aria-label="Copiar senha">' + ico("copy") + "</button>" : "") + "</div></div>" +
         '<div class="m-nums"><div><strong>' + st.total + "</strong><small>Orçamentos</small></div><div><strong>" + st.abertos + "</strong><small>Abertos</small></div><div><strong>" + st.fechados + "</strong><small>Fechados</small></div><div><strong>" + conv + "</strong><small>Conversão</small></div></div>" +
         '<div class="m-foot">' + esc(ago(st.ultimo)) + (st.valorFechado ? " · " + BRL.format(st.valorFechado) + " fechados" : "") + "</div>" +
         '<div class="m-actions"><a class="btn sm" href="' + esc(linkOf(m)) + '" target="_blank" rel="noopener">' + ico("open") + "Abrir</a>" +
@@ -251,6 +260,7 @@
       "\nDica: salve o link na tela inicial do celular para abrir como um aplicativo. Qualquer dúvida, é só chamar.";
   }
   function showAccess(m, senha, title) {
+    senha = senha || m.senha || "";
     var msg = accessMsg(m, senha);
     openModal('<div class="modal-head"><h2>' + esc(title || "Acesso da marmoraria") + '</h2><button class="icon-btn" data-close aria-label="Fechar">' + ico("x") + "</button></div>" +
       '<div class="done">' + (title ? '<div class="big">' + ico("check") + "</div>" : "") +
@@ -259,7 +269,7 @@
       '<p class="label" style="text-align:left;margin:0 0 6px">Mensagem pronta para enviar ao cliente</p><div class="msg-box" id="am">' + esc(msg) + "</div>" +
       '<div class="add-row" style="margin-top:14px;justify-content:flex-end"><a class="btn" target="_blank" rel="noopener" href="' + esc(linkOf(m)) + '">' + ico("open") + "Abrir gerador</a>" +
       '<button class="btn gold" data-copy-msg>' + ico("copy") + "Copiar mensagem</button></div>" +
-      (senha ? '<p class="subnote" style="margin-top:12px">Anote a senha: por segurança, ela não fica visível no painel depois. Se esquecer, é só trocar.</p>' : "") + "</div>");
+      (senha ? "" : '<p class="subnote" style="margin-top:12px">Esta marmoraria ainda não tem senha registrada no painel. Use “Trocar senha” para definir uma.</p>') + "</div>");
   }
   document.addEventListener("click", function (e) {
     var c = e.target.closest && e.target.closest("[data-copy]"); if (c) return copy(c.dataset.copy);
@@ -280,7 +290,7 @@
     $("#gp").addEventListener("click", function () { np.value = genPassword(); np.type = "text"; });
     $("#pwf").addEventListener("submit", function (e) {
       e.preventDefault(); var b = $("#sp"); b.disabled = true;
-      api("POST", "password", { senha: np.value }, "&id=" + encodeURIComponent(m.id)).then(function () { showAccess(m, np.value, "Senha alterada"); }, function (err) { b.disabled = false; toast(err.message); });
+      api("POST", "password", { senha: np.value }, "&id=" + encodeURIComponent(m.id)).then(function () { m.senha = np.value; renderCards(); showAccess(m, np.value, "Senha alterada"); }, function (err) { b.disabled = false; toast(err.message); });
     });
   }
   function delModal(m) {
@@ -313,7 +323,7 @@
   /* ---------- Formulário (nova / editar) ---------- */
   function emptyForm() {
     return { id: null, nome: "", slug: "", slugTouched: false, empresa: { cnpj: "", whatsapp: "", instagram: "", email: "", endereco: "", cidade: "" },
-      logo: null, tema: { cor: "#8a1c1c", escura: "#151313", fundoLogo: "claro", fonte: "moderna" }, sugestoes: [], senha: "", criadoPor: localGet("qh4.gestor") };
+      logo: null, tema: { cor: "#8a1c1c", escura: "#151313", fundoLogo: "claro", fonte: "moderna" }, sugestoes: [], senha: "", senhaOriginal: "", squad: "" };
   }
   function localGet(k) { try { return localStorage.getItem(k) || ""; } catch (e) { return ""; } }
   function loadEdit(id) {
@@ -321,7 +331,7 @@
     api("GET", "get", undefined, "&id=" + encodeURIComponent(id)).then(function (m) {
       var f = emptyForm();
       f.id = m.id; f.nome = m.nome; f.slug = m.slug; f.slugTouched = true; f.empresa = Object.assign(f.empresa, m.empresa || {});
-      f.logo = m.logo || null; f.tema = Object.assign(f.tema, m.tema || {}); f.criadoPor = m.criadoPor || ""; f.ativo = m.ativo;
+      f.logo = m.logo || null; f.tema = Object.assign(f.tema, m.tema || {}); f.squad = m.squad || ""; f.senha = m.senha || ""; f.senhaOriginal = m.senha || ""; f.ativo = m.ativo;
       viewForm(f);
     }, function (e) { app.innerHTML = '<div class="empty"><strong>Não foi possível abrir</strong>' + esc(e.message) + "</div>"; });
   }
@@ -362,8 +372,10 @@
       f("Endereço", "empresa.endereco", e.endereco, { ph: "Rua, número - bairro", cls: "span2" }) +
       f("Cidade / UF · CEP", "empresa.cidade", e.cidade, { ph: "Ex.: Divinópolis/MG · CEP 35500-000" }) +
       f("Instagram", "empresa.instagram", e.instagram, { ph: "@marmoraria (opcional)" }) +
-      f("E-mail", "empresa.email", e.email, { ph: "opcional", type: "email", mode: "email" }) +
-      f("Gestor responsável", "criadoPor", F.criadoPor, { ph: "Seu nome", hint: "Aparece no painel para a equipe QH4 saber quem cuida da conta." }) + "</div>");
+      f("E-mail", "empresa.email", e.email, { ph: "opcional", type: "email", mode: "email", cls: "span2" }) +
+      '<div class="field span2" id="fsquad"><span>Squad responsável <b class="req">*</b></span><div class="seg" data-squad>' +
+      ["A", "B", "C", "D"].map(function (q) { return '<button type="button" data-v="' + q + '" class="' + (F.squad === q ? "on" : "") + '">Squad ' + q + "</button>"; }).join("") +
+      "</div><small>Qual squad da QH4 cuida desta marmoraria.</small></div></div>");
     h += sec(2, "Identidade visual", "Envie o logo: as cores são sugeridas automaticamente. Ajuste se quiser.",
       '<div class="logo-drop"><label class="logo-box' + (F.logo ? " has" : "") + (F.tema.fundoLogo === "escuro" ? " dark" : "") + '" id="lbox">' +
       (F.logo ? '<img src="' + esc(F.logo) + '" alt="Logo">' : "<span>" + ico("image") + "Enviar logo</span>") + '<input type="file" accept="image/*" hidden id="lfile"></label>' +
@@ -373,11 +385,12 @@
       (F.sugestoes.length ? '<div style="margin-top:10px"><span class="label">Cores encontradas no logo</span><div class="swatches">' + F.sugestoes.map(function (c) { return '<button type="button" class="swatch-btn" data-sw="' + c + '" style="background:' + c + '" title="Usar ' + c + ' como cor principal" aria-label="Usar ' + c + '"></button>'; }).join("") + "</div></div>" : "") +
       '<div class="seg-row"><div class="field"><span>Fundo do logo</span><div class="seg" data-seg="fundoLogo"><button type="button" data-v="claro">Claro</button><button type="button" data-v="escuro">Escuro</button></div><small>Use escuro se o logo for claro.</small></div>' +
       '<div class="field"><span>Estilo dos títulos</span><div class="seg" data-seg="fonte"><button type="button" data-v="moderna">Moderno</button><button type="button" data-v="classica">Clássico</button></div></div></div>');
-    if (isNew) {
-      h += sec(3, "Acesso da equipe", "Senha que a equipe da marmoraria vai usar para entrar no gerador.",
-        '<div class="grid g2"><label class="field"><span>Senha da equipe <b class="req">*</b></span><div class="pw-wrap"><input type="password" id="fpw" data-f="senha" value="' + esc(F.senha) + '" autocomplete="new-password" minlength="6"><button type="button" class="pw-eye" data-eye="fpw" aria-label="Mostrar senha">' + ico("eye") + "</button></div><small>Mínimo de 6 caracteres.</small></label>" +
-        '<div class="field"><span>&nbsp;</span><button type="button" class="btn" id="fgen" style="align-self:flex-start">' + ico("spark") + "Gerar senha</button></div></div>");
-    }
+    h += sec(3, "Acesso da equipe", isNew ? "Senha que a equipe da marmoraria vai usar para entrar no gerador." : "Link e senha que a equipe usa para entrar. Copie e envie para o cliente.",
+      (isNew ? "" : '<div class="m-access" style="margin:0 0 16px;border:1px solid var(--line);border-radius:10px"><div class="row"><span class="k">Link</span><span class="v">' + esc(base() + "/m/" + F.slug) + '</span><button type="button" class="icon-btn" data-copy="' + esc(base() + "/m/" + F.slug) + '" aria-label="Copiar link">' + ico("copy") + "</button></div></div>") +
+      '<div class="grid g2"><label class="field"><span>Senha da equipe <b class="req">*</b></span><div class="pw-wrap"><input type="' + (isNew ? "password" : "text") + '" id="fpw" data-f="senha" value="' + esc(F.senha) + '" autocomplete="new-password" minlength="6"><button type="button" class="pw-eye' + (isNew ? "" : " on") + '" data-eye="fpw" aria-label="' + (isNew ? "Mostrar" : "Esconder") + ' senha">' + ico(isNew ? "eye" : "eyeOff") + "</button></div>" +
+      "<small>" + (isNew ? "Mínimo de 6 caracteres." : F.senhaOriginal ? "Se você mudar a senha, quem estiver conectado precisa entrar de novo com a nova." : "Nenhuma senha registrada no painel. Digite ou gere uma para registrar (a anterior deixa de valer).") + "</small></label>" +
+      '<div class="field"><span>&nbsp;</span><div class="add-row"><button type="button" class="btn" id="fgen">' + ico("spark") + (isNew ? "Gerar senha" : "Gerar nova senha") + "</button>" +
+      (isNew ? "" : '<button type="button" class="btn" id="fcopypw">' + ico("copy") + "Copiar senha</button>") + "</div></div></div>");
     h += '<div class="add-row" style="justify-content:flex-end;margin:6px 0 30px"><a class="btn ghost" href="#/">Cancelar</a><button class="btn gold" id="fsave">' + ico("check") + (isNew ? "Criar gerador" : "Salvar alterações") + "</button></div>";
     h += '</div><aside class="f-side"><div class="pv" id="pv"></div></aside></div>';
     app.innerHTML = h; topbarH();
@@ -397,7 +410,6 @@
         if (k === "empresa.whatsapp") { v = maskPhone(v); inp.value = v; }
         setPath(F, k, v); inp.classList.remove("invalid");
         if (k === "nome") { if (!F.slugTouched) { F.slug = slugify(v); $("#fslug").value = F.slug; checkSlug(); } renderPreview(); }
-        if (k === "criadoPor") { try { localStorage.setItem("qh4.gestor", v); } catch (e) {} }
       });
     });
     $("#fslug").addEventListener("input", function (e) { F.slugTouched = true; F.slug = e.target.value; checkSlug(); });
@@ -424,6 +436,10 @@
       });
     });
     var gen = $("#fgen"); if (gen) gen.addEventListener("click", function () { F.senha = genPassword(); var p = $("#fpw"); p.value = F.senha; p.type = "text"; p.classList.remove("invalid"); });
+    var cpw = $("#fcopypw"); if (cpw) cpw.addEventListener("click", function () { copy($("#fpw").value, "Senha copiada"); });
+    $$("[data-squad] button").forEach(function (b) {
+      b.addEventListener("click", function () { F.squad = b.dataset.v; $$("[data-squad] button").forEach(function (x) { x.classList.toggle("on", x === b); }); $("#fsquad").classList.remove("invalid-field"); });
+    });
     $("#fsave").addEventListener("click", saveForm);
   }
   function keepScroll(fn) { var y = window.scrollY; fn(); window.scrollTo(0, y); }
@@ -463,16 +479,22 @@
   function saveForm() {
     var F = FORM, isNew = !F.id, bad = [];
     if (!String(F.nome).trim()) bad.push($("#fn"));
-    if (isNew && String(F.senha || "").length < 6) bad.push($("#fpw"));
+    var senhaOk = isNew ? String(F.senha || "").length >= 6 : (F.senha === F.senhaOriginal || String(F.senha || "").length >= 6);
+    if (!senhaOk) bad.push($("#fpw"));
+    if (!F.squad) { $("#fsquad").classList.add("invalid-field"); bad.push($("#fsquad")); }
     if (!slugify(F.slug) || !slugOk) bad.push($("#fslug"));
     if (bad.length) {
       bad.forEach(function (x) { if (x) x.classList.add("invalid"); });
       bad[0].scrollIntoView({ behavior: "smooth", block: "center" }); setTimeout(function () { bad[0].focus({ preventScroll: true }); }, 300);
-      toast(!String(F.nome).trim() ? "Preencha o nome da marmoraria." : isNew && String(F.senha || "").length < 6 ? "A senha precisa de pelo menos 6 caracteres." : "Escolha um link disponível.");
+      toast(!String(F.nome).trim() ? "Preencha o nome da marmoraria." : !senhaOk ? "A senha precisa de pelo menos 6 caracteres." : !F.squad ? "Escolha o squad responsável." : "Escolha um link disponível.");
       return;
     }
     var b = $("#fsave"); b.disabled = true; b.lastChild.textContent = "Salvando…";
-    var body = { nome: F.nome.trim(), slug: slugify(F.slug), empresa: Object.assign({}, F.empresa, { nome: F.nome.trim() }), logo: F.logo, tema: F.tema, criadoPor: F.criadoPor };
+    var body = { nome: F.nome.trim(), slug: slugify(F.slug), empresa: Object.assign({}, F.empresa, { nome: F.nome.trim() }), logo: F.logo, tema: F.tema, squad: F.squad };
+    if (!isNew && F.senha !== F.senhaOriginal && F.senha) {
+      if (!confirm("Você mudou a senha da equipe. Quem estiver usando o gerador vai precisar entrar de novo com a senha nova. Continuar?")) { b.disabled = false; b.lastChild.textContent = "Salvar alterações"; return; }
+      body.senha = F.senha;
+    }
     var p = isNew ? api("POST", "create", Object.assign(body, { senha: F.senha })) : api("PUT", "update", body, "&id=" + encodeURIComponent(F.id));
     p.then(function (m) {
       LIST = null;
