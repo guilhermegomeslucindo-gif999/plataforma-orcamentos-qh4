@@ -1,0 +1,16 @@
+{
+  "name": "plataforma-orcamentos-qh4",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Plataforma QH4 de geradores de orçamento para marmorarias.",
+  "type": "module",
+  "scripts": {
+    "dev": "node dev-server.mjs"
+  },
+  "engines": {
+    "node": ">=18"
+  },
+  "dependencies": {
+    "pg": "8.13.1"
+  }
+}

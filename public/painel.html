@@ -1,0 +1,35 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Painel QH4 · Geradores de orçamento</title>
+<meta name="robots" content="noindex, nofollow">
+<meta name="theme-color" content="#0d0b09">
+<link rel="icon" type="image/png" href="/assets/qh4-icon.png">
+<link rel="apple-touch-icon" href="/assets/qh4-icon.png">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@600;700;800&family=Barlow:wght@400;500;600;700&family=Montserrat:ital,wght@0,800;1,700;1,800&family=Cinzel:wght@700&display=swap">
+<link rel="stylesheet" href="/styles.css">
+<link rel="stylesheet" href="/painel.css">
+</head>
+<body class="head-dark painel">
+<header class="topbar">
+  <div class="topbar-inner">
+    <a class="brand" href="#/" aria-label="Início">
+      <span class="qh4-mark">QH<b>4</b></span>
+      <span class="brand-text"><span class="brand-sub">Painel de geradores de orçamento</span></span>
+    </a>
+    <nav class="tabs" aria-label="Seções" hidden>
+      <a href="#/" data-tab="lista"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 6h16M4 12h16M4 18h10"/></svg><span>Marmorarias</span></a>
+      <a href="#/nova" data-tab="nova"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg><span>Nova</span></a>
+      <a href="#/sair" data-tab="sair"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M15 18l-6-6 6-6"/></svg><span>Sair</span></a>
+    </nav>
+  </div>
+</header>
+<main id="app" tabindex="-1"></main>
+<div id="toast" role="status" aria-live="polite"></div>
+<script src="/painel.js"></script>
+</body>
+</html>
