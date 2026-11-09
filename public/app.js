@@ -718,122 +718,114 @@
   }
 
   /* ================= Documento ================= */
+  /* Documento do orçamento — modelo "Executivo" (cores e logo vêm da marmoraria) */
+  var IC_OK = '<svg aria-hidden="true" viewBox="0 0 24 24"><path d="m5 12 5 5 9-10"/></svg>';
+  var IC_NO = '<svg aria-hidden="true" viewBox="0 0 24 24"><path d="M6 6l12 12M18 6 6 18"/></svg>';
   function docHTML(q) {
     var e = S.empresa, c = calc(q), cmp = q.comparar;
     var o1 = q.opcoes[0] || "Opção 1", o2 = q.opcoes[1] || "Opção 2";
-    var validade = addDays(q.data, q.validadeDias);
-    var h = '<article class="doc' + (BRAND.tema.fundoLogo === "escuro" ? " head-dark" : "") + '">';
-    h += '<header class="doc-head">' + brandBlock("doc") + '<div class="doc-brand"><div class="s">Proposta comercial</div></div>' +
-      '<div class="doc-num"><div class="l">Orçamento nº</div><div class="v">' + esc(numLabel(q)) + '</div><div class="d">Emitido em ' + fmtDate(q.data) + "</div></div></header>";
-    h += '<div class="doc-body">';
-    var fn = firstName(q.cliente.nome);
-    h += '<div class="doc-title">' + esc(titleOf(q)) + "</div>";
-    h += '<p class="doc-hello">Olá, <strong>' + esc(fn) + "</strong>! Preparamos esta proposta com base no projeto e nas medidas que conversamos. Abaixo estão as peças de cada ambiente, o que está incluso e as condições. Qualquer dúvida, é só chamar" + (q.vendedor.nome ? " " + esc(firstName(q.vendedor.nome)) : " a nossa equipe") + ".</p>";
+    var validade = addDays(q.data, q.validadeDias), qx = q.extras || {};
+    var dark = BRAND.tema.fundoLogo === "escuro";
+    var h = '<article class="doc ex' + (dark ? " head-dark" : "") + '">';
 
-    var qx = q.extras || {};
-    var cells = [["Cliente", q.cliente.nome], ["WhatsApp", vis("cliente.tel") ? q.cliente.tel : ""], ["E-mail", vis("cliente.email") ? q.cliente.email : ""], ["Arquiteto(a)", vis("arquiteto") ? q.arquiteto : ""],
-      ["Responsável", vis("vendedor") ? [q.vendedor.nome, q.vendedor.tel].filter(Boolean).join(" · ") : ""]]
-      .concat(extrasDe("cliente").filter(function (x) { return x.pdf; }).map(function (x) { return [esc(x.nome), extraTexto(x, qx[x.id])]; }))
-      .concat([["Validade", "Até " + fmtDate(validade)]]).filter(function (x) { return String(x[1] || "").trim(); });
+    // Cabeçalho e faixa
+    h += '<header class="ex-head">' + brandBlock("doc") +
+      '<div class="ex-num"><div class="l">Proposta comercial</div><div class="v">' + esc(numLabel(q)) + '</div><div class="d">' + fmtDate(q.data) + "</div></div></header>";
+    h += '<div class="ex-band"><span>' + esc(titleOf(q)) + "</span><span>Válida até " + fmtDate(validade) + "</span></div>";
+    h += '<div class="ex-body">';
+
+    // Dados do cliente e da obra
+    var cells = [["Cliente", q.cliente.nome, true], ["WhatsApp", vis("cliente.tel") ? q.cliente.tel : ""], ["E-mail", vis("cliente.email") ? q.cliente.email : ""],
+      ["Arquiteto(a)", vis("arquiteto") ? q.arquiteto : ""], ["Responsável", vis("vendedor") ? [q.vendedor.nome, q.vendedor.tel].filter(Boolean).join(" · ") : ""]]
+      .concat(extrasDe("cliente").filter(function (x) { return x.pdf; }).map(function (x) { return [x.nome, extraTexto(x, qx[x.id])]; }))
+      .filter(function (x) { return String(x[1] || "").trim(); });
     var addr = [vis("obra.endereco") ? q.obra.endereco : "", vis("obra.bairro") ? q.obra.bairro : "", vis("obra.cidade") ? q.obra.cidade : ""].filter(function (x) { return String(x || "").trim(); }).join(" · ");
-    h += '<div class="doc-info">';
-    cells.forEach(function (x, i) {
-      var span = "";
-      if (i === cells.length - 1) { var rest = 3 - (cells.length % 3 || 3); if (rest) span = " s" + (rest + 1); }
-      h += '<div class="' + span.trim() + '"><div class="k">' + x[0] + '</div><div class="v">' + esc(x[1]) + "</div></div>";
-    });
-    if (addr) h += '<div class="s3"><div class="k">Endereço da obra</div><div class="v">' + esc(addr) + "</div></div>";
-    h += "</div>";
+    var rem = cells.length % 4;
+    h += '<div class="ex-info">' + cells.map(function (x, i) {
+      var span = i === cells.length - 1 && rem ? ' style="grid-column: span ' + (4 - rem + 1) + '"' : "";
+      return "<div" + span + '><span class="k">' + esc(x[0]) + '</span><span class="v">' + (x[2] ? "<b>" + esc(x[1]) + "</b>" : esc(x[1])) + "</span></div>";
+    }).join("") + (addr ? '<div style="grid-column: 1 / -1"><span class="k">Endereço da obra</span><span class="v">' + esc(addr) + "</span></div>" : "") + "</div>";
 
-    // Ambientes
-    h += '<div class="doc-sec-title"><h3>Peças por ambiente</h3>' + (cmp ? '<span class="sub">' + esc(o1) + " × " + esc(o2) + "</span>" : "") + "</div>";
+    // Peças por ambiente
+    var nCols = cmp ? 4 : 4;
+    h += '<section class="ex-sec"><h2 class="ex-h">Peças por ambiente</h2><table class="ex-table"><thead><tr>' +
+      (cmp ? '<th>Peça</th><th class="r" style="width:17%">Medidas</th><th style="width:25%">' + esc(o1) + '</th><th style="width:25%">' + esc(o2) + "</th>"
+        : '<th>Peça</th><th style="width:31%">Material</th><th class="r" style="width:17%">Medidas</th><th class="r" style="width:15%">Valor</th>') + "</tr></thead><tbody>";
     q.ambientes.forEach(function (a, ai) {
       if (!a.itens.length) return;
       var r = c.amb[ai];
-      h += '<div class="doc-amb"><div class="doc-amb-head"><span class="t">' + esc(a.nome || "Ambiente " + (ai + 1)) + '</span><span class="c">' +
-        (cmp ? esc(o1) + " " + money(r.A) + " · " + esc(o2) + " " + money(r.B) : "Subtotal " + money(r.A)) + "</span></div>";
-      h += '<table class="doc-table"><thead><tr>' + (cmp ?
-        '<th style="width:31%">Peça</th><th style="width:15%">Medidas</th><th style="width:27%">' + esc(o1) + '</th><th style="width:27%">' + esc(o2) + "</th>" :
-        '<th style="width:40%">Peça</th><th style="width:17%">Medidas</th><th style="width:28%">Material</th><th class="r" style="width:15%">Valor</th>') + "</tr></thead><tbody>";
+      h += '<tr class="grp"><td colspan="' + (nCols - 1) + '">' + esc(a.nome || "Ambiente " + (ai + 1)) + '</td><td class="r">' +
+        (cmp ? money(r.A) + " · " + money(r.B) : money(r.A)) + "</td></tr>";
       a.itens.forEach(function (it) {
         var area = itemArea(it), q2 = vis("peca.qtd") ? (parseNum(it.qtd) || 1) : 1;
-        var det = vis("peca.detalhes") ? it.detalhes.slice() : []; if (vis("peca.obs") && String(it.obs || "").trim()) det.push(it.obs.trim());
+        var det = vis("peca.detalhes") ? it.detalhes.slice() : [];
+        if (vis("peca.obs") && String(it.obs || "").trim()) det.push(it.obs.trim());
         extrasDe("peca").forEach(function (x) { var v = x.pdf ? extraTexto(x, (it.extras || {})[x.id]) : ""; if (v) det.push(x.nome + ": " + v); });
-        var peca = '<div class="peca">' + esc(it.peca || "Peça") + "</div>" + (det.length ? '<div class="det">' + esc(det.join(" · ")) + "</div>" : "");
-        var meas = '<td class="meas">' + (meters(it.comp) && meters(it.larg) ? num(meters(it.comp), 2) + " × " + num(meters(it.larg), 2) + " m" : "–") +
-          (q2 > 1 ? "<small>" + q2 + " unidades</small>" : "") + (area ? "<small>" + num(area, 2) + " m²</small>" : "") + "</td>";
+        var peca = "<td><b>" + esc(it.peca || "Peça") + "</b>" + (q2 > 1 ? ' <span class="qt">× ' + q2 + "</span>" : "") + (det.length ? '<span class="sub">' + esc(det.join(" · ")) + "</span>" : "") + "</td>";
+        var meas = '<td class="r">' + (meters(it.comp) && meters(it.larg) ? num(meters(it.comp), 2) + " × " + num(meters(it.larg), 2) + " m" : "–") +
+          (area ? '<span class="sub">' + num(area, 2) + " m²</span>" : "") + "</td>";
         var sub = [vis("peca.acabamento") ? it.acabamento : "", vis("peca.espessura") ? it.espessura : ""].filter(function (x) { return String(x || "").trim(); }).join(" · ");
-        var matCell = function (m, v) {
-          return '<td><div class="mat">' + esc(m || "A definir") + (sub ? "<small>" + esc(sub) + "</small>" : "") + '</div><div class="val" style="margin-top:4px">' + money(v) + "</div></td>";
-        };
+        var matTd = function (m, v) { return "<td>" + esc(m || "A definir") + (sub ? '<span class="sub">' + esc(sub) + "</span>" : "") + (v != null ? '<span class="val">' + money(v) + "</span>" : "") + "</td>"; };
         if (cmp) {
           var same = sameInB(it);
-          h += "<tr><td>" + peca + "</td>" + meas + matCell(it.matA, itemVal(it, "A")) + matCell(same ? it.matA : it.matB || it.matA, itemVal(it, "B")) + "</tr>";
+          h += "<tr>" + peca + meas + matTd(it.matA, itemVal(it, "A")) + matTd(same ? it.matA : it.matB || it.matA, itemVal(it, "B")) + "</tr>";
         } else {
-          h += "<tr><td>" + peca + "</td>" + meas + '<td><div class="mat">' + esc(it.matA || "A definir") + (sub ? "<small>" + esc(sub) + "</small>" : "") + '</div></td><td class="r val">' + money(itemVal(it, "A")) + "</td></tr>";
+          h += "<tr>" + peca + matTd(it.matA, null) + meas + '<td class="r"><b>' + money(itemVal(it, "A")) + "</b></td></tr>";
         }
       });
-      h += "</tbody></table></div>";
     });
+    h += "</tbody></table></section>";
 
-    // Serviços
+    // Condições e total
+    var conds = [];
+    if (vis("pagamento")) conds.push(["Pagamento", q.pagamento || "A combinar"]);
+    if (vis("prazo")) conds.push(["Prazo", q.prazo || "A combinar"]);
+    conds.push(["Validade", (parseInt(q.validadeDias, 10) || 0) + " dias, até " + fmtDate(validade)]);
+    extrasDe("condicoes").forEach(function (x) { var v = x.pdf ? extraTexto(x, qx[x.id]) : ""; if (v) conds.push([x.nome, v]); });
     var srv = vis("servicos") ? q.servicos.filter(function (s) { return String(s.desc || "").trim(); }) : [];
-    if (srv.length) {
-      h += '<div class="doc-sec"><div class="doc-sec-title"><h3>Serviços</h3></div><table class="doc-table" style="border-top:1px solid #e3dccf"><tbody>';
-      srv.forEach(function (s) { h += "<tr><td>" + esc(s.desc) + '</td><td class="r val">' + (s.incluso ? '<span style="color:#2f7a4f">Incluso</span>' : money(parseNum(s.valor))) + "</td></tr>"; });
-      h += "</tbody></table></div>";
-    }
-
-    // Resumo
-    function totalCard(label, k, pecas) {
+    function totalBox(label, k, pecas) {
       var x = c[k];
-      return '<div class="doc-total-card"><div class="h">' + esc(label) + '</div><div class="rows">' +
+      return '<div class="ex-total">' + (label ? '<div class="opt">' + esc(label) + "</div>" : "") + '<div class="rows">' +
         '<div class="row"><span>Peças</span><span>' + money(pecas) + "</span></div>" +
-        (!vis("servicos") ? "" : c.serv ? '<div class="row"><span>Serviços</span><span>' + money(c.serv) + "</span></div>" : '<div class="row"><span>Serviços</span><span>Incluso</span></div>') +
-        (x.desc ? '<div class="row neg"><span>Desconto' + (q.desconto.tipo === "%" ? " (" + num(parseNum(q.desconto.valor), 0) + "%)" : "") + "</span><span>− " + money(x.desc) + "</span></div>" : "") +
+        srv.map(function (s) { return '<div class="row"><span>' + esc(s.desc) + "</span><span>" + (s.incluso ? "Incluso" : money(parseNum(s.valor))) + "</span></div>"; }).join("") +
+        (x.desc ? '<div class="row"><span>Desconto' + (q.desconto.tipo === "%" ? " (" + num(parseNum(q.desconto.valor), 0) + "%)" : "") + "</span><span>− " + money(x.desc) + "</span></div>" : "") +
         '</div><div class="grand"><span>Total</span><strong>' + money(x.total) + "</strong></div></div>";
     }
-    h += '<div class="doc-sec"><div class="doc-sec-title"><h3>Investimento</h3></div><div class="doc-summary' + (cmp ? " two" : "") + '">' +
-      (cmp ? totalCard(o1, "A", c.pecasA) + totalCard(o2, "B", c.pecasB) : totalCard("Resumo do investimento", "A", c.pecasA)) + "</div></div>";
+    h += '<section class="ex-grid"><div><h2 class="ex-h">Condições</h2><table class="ex-kv">' +
+      conds.map(function (x) { return '<tr><td class="k">' + esc(x[0]) + "</td><td>" + esc(x[1]).replace(/\n/g, "<br>") + "</td></tr>"; }).join("") + "</table></div>" +
+      "<div>" + (cmp ? totalBox(o1, "A", c.pecasA) + totalBox(o2, "B", c.pecasB) : totalBox("", "A", c.pecasA)) + "</div></section>";
 
-    // Condições
-    var conds = [];
-    if (vis("pagamento")) conds.push(["Pagamento", esc(q.pagamento || "A combinar")]);
-    if (vis("prazo")) conds.push(["Prazo de produção", esc(q.prazo || "A combinar")]);
-    conds.push(["Validade da proposta", (parseInt(q.validadeDias, 10) || 0) + " dias · até " + fmtDate(validade)]);
-    extrasDe("condicoes").forEach(function (x) { var v = x.pdf ? extraTexto(x, qx[x.id]) : ""; if (v) conds.push([esc(x.nome), esc(v)]); });
-    h += '<div class="doc-sec"><div class="doc-sec-title"><h3>Condições</h3></div><div class="doc-cond">' +
-      conds.map(function (x) { return '<div><div class="k">' + x[0] + '</div><div class="v">' + x[1] + "</div></div>"; }).join("") + "</div></div>";
-
-    var inc = vis("inclusos") ? q.inclusos.filter(function (x) { return x.on && String(x.t).trim(); }) : [], ninc = vis("inclusos") ? q.naoInclusos.filter(function (x) { return x.on && String(x.t).trim(); }) : [];
+    // Incluso / não incluso
+    var inc = vis("inclusos") ? q.inclusos.filter(function (x) { return x.on && String(x.t).trim(); }) : [];
+    var ninc = vis("inclusos") ? q.naoInclusos.filter(function (x) { return x.on && String(x.t).trim(); }) : [];
     if (inc.length || ninc.length) {
-      var li = function (arr, ic) { return arr.map(function (x) { return '<li><svg viewBox="0 0 24 24">' + ICON[ic] + "</svg><span>" + esc(x.t) + "</span></li>"; }).join(""); };
-      h += '<div class="doc-sec"><div class="doc-inc">' +
-        (inc.length ? '<div class="yes"><h4>Está incluso</h4><ul>' + li(inc, "check") + "</ul></div>" : "<div></div>") +
-        (ninc.length ? '<div class="no"><h4>Não está incluso</h4><ul>' + li(ninc, "x") + "</ul></div>" : "<div></div>") + "</div></div>";
+      var li = function (arr, ic) { return arr.map(function (x) { return "<li>" + ic + "<span>" + esc(x.t) + "</span></li>"; }).join(""); };
+      h += '<section class="ex-inc">' +
+        (inc.length ? '<div class="yes"><h3>Está incluso</h3><ul>' + li(inc, IC_OK) + "</ul></div>" : "") +
+        (ninc.length ? '<div class="no"><h3>Não está incluso</h3><ul>' + li(ninc, IC_NO) + "</ul></div>" : "") + "</section>";
     }
 
     // Materiais
     if (q.explicarMateriais && vis("explicarMateriais")) {
       var seen = {}, mats = [];
       q.ambientes.forEach(function (a) { a.itens.forEach(function (it) { [it.matA, q.comparar ? it.matB : ""].forEach(function (m) { m = String(m || "").trim(); if (m && !seen[m.toLowerCase()]) { seen[m.toLowerCase()] = 1; var inf = matInfo(m); if (inf) mats.push([m, inf]); } }); }); });
-      if (mats.length) {
-        h += '<div class="doc-sec"><div class="doc-sec-title"><h3>Sobre os materiais</h3></div><div class="doc-mats">' +
-          mats.map(function (m) { return '<div class="doc-mat"><div><b>' + esc(m[0]) + "</b><span>" + esc(m[1]) + "</span></div></div>"; }).join("") + "</div></div>";
-      }
+      if (mats.length) h += '<section class="ex-sec"><h2 class="ex-h">Sobre os materiais</h2><div class="ex-box">' +
+        mats.map(function (m) { return "<p><b>" + esc(m[0]) + ".</b> " + esc(m[1]) + "</p>"; }).join("") + "</div></section>";
     }
-    if (vis("observacoes") && String(q.observacoes || "").trim()) h += '<div class="doc-sec"><div class="doc-sec-title"><h3>Observações</h3></div><div class="doc-obs">' + esc(q.observacoes.trim()) + "</div></div>";
+    if (vis("observacoes") && String(q.observacoes || "").trim()) h += '<section class="ex-sec"><h2 class="ex-h">Observações</h2><div class="ex-box ex-obs">' + esc(q.observacoes.trim()) + "</div></section>";
     if (vis("imagens") && q.imagens.length) {
-      h += '<div class="doc-sec-title"><h3>Imagens e referências</h3></div><div class="doc-imgs" style="margin-bottom:22px">' +
-        q.imagens.map(function (im) { return '<figure class="doc-img" style="margin:0"><img src="' + im.src + '" alt="">' + (String(im.legenda || "").trim() ? '<figcaption class="cap">' + esc(im.legenda) + "</figcaption>" : "") + "</figure>"; }).join("") + "</div>";
+      h += '<section class="ex-sec"><h2 class="ex-h">Imagens e referências</h2><div class="ex-imgs">' +
+        q.imagens.map(function (im) { return '<figure><img src="' + im.src + '" alt="">' + (String(im.legenda || "").trim() ? "<figcaption>" + esc(im.legenda) + "</figcaption>" : "") + "</figure>"; }).join("") + "</div></section>";
     }
     var termos = String(q.termos || "").split("\n").map(function (t) { return t.trim(); }).filter(Boolean);
-    if (vis("termos") && termos.length) h += '<div class="doc-sec"><div class="doc-sec-title"><h3>Condições gerais</h3></div><ol class="doc-terms">' + termos.map(function (t) { return "<li>" + esc(t) + "</li>"; }).join("") + "</ol></div>";
-
-    if (vis("assinatura")) h += '<div class="doc-sign"><div><b>' + esc(q.cliente.nome) + "</b>De acordo · data ____/____/______</div><div><b>" + esc(e.nome) + "</b>" + esc(q.vendedor.nome || "Responsável") + "</div></div>";
+    if (vis("termos") && termos.length) h += '<section class="ex-flow"><h2 class="ex-h">Condições gerais</h2><ol class="ex-terms">' + termos.map(function (t) { return "<li>" + esc(t) + "</li>"; }).join("") + "</ol></section>";
+    if (vis("assinatura")) h += '<div class="ex-sign"><div><b>' + esc(q.cliente.nome) + "</b>De acordo · ____/____/______</div><div><b>" + esc(e.nome) + "</b>" + esc(q.vendedor.nome ? q.vendedor.nome + " · Responsável" : "Responsável") + "</div></div>";
     h += "</div>";
-    var foot = [["", e.nome], ["CNPJ", e.cnpj], ["WhatsApp", e.whatsapp], ["Instagram", e.instagram], ["E-mail", e.email], ["", [e.endereco, e.cidade].filter(Boolean).join(" · ")]].filter(function (x) { return String(x[1] || "").trim(); });
-    h += '<footer class="doc-foot">' + foot.map(function (x) { return "<span>" + (x[0] ? x[0] + " " : "") + (x[0] ? esc(x[1]) : "<b>" + esc(x[1]) + "</b>") + "</span>"; }).join("") + "</footer>";
+
+    // Rodapé
+    var left = [e.cnpj ? "CNPJ " + e.cnpj : ""].filter(Boolean).join("");
+    var right = [[e.endereco, e.cidade].filter(Boolean).join(", "), e.whatsapp ? "WhatsApp " + e.whatsapp : "", e.instagram, e.email].filter(function (x) { return String(x || "").trim(); }).join(" · ");
+    h += '<footer class="ex-foot"><span><b>' + esc(e.nome || BRAND.nome) + "</b>" + (left ? " · " + esc(left) : "") + "</span>" + (right ? "<span>" + esc(right) + "</span>" : "") + "</footer>";
     h += "</article>";
     return h;
   }
